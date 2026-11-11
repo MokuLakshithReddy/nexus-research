@@ -1,5 +1,5 @@
 const API = '/api';
-const state = { projects: [], selectedProject: null, sources: [], reports: [], messages: [], activeTab: 'overview', activeFilter: 'all', currentReportId: null, allSources: [] };
+const state = { projects: [], selectedProject: null, sources: [], reports: [], messages: [], activeTab: 'overview', activeFilter: 'all', currentReportId: null, allSources: [], currentUser: null, authMode: 'register', activeJobId: null };
 const $ = (id) => document.getElementById(id);
 
 function escapeHtml(value = '') {
@@ -18,14 +18,25 @@ function toast(message, error = false) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => node.classList.add('hidden'), 4200);
 }
+function readCookie(name) {
+  const item = document.cookie.split('; ').find(part => part.startsWith(`${name}=`));
+  return item ? decodeURIComponent(item.slice(name.length + 1)) : '';
+}
 async function api(path, options = {}) {
-  const response = await fetch(`${API}${path}`, {
-    ...options,
-    headers: { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(options.headers || {}) },
-  });
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = { ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), ...(options.headers || {}) };
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers['X-CSRF-Token']) {
+    const csrf = readCookie('nexus_csrf');
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+  const response = await fetch(`${API}${path}`, { ...options, method, headers, credentials: 'same-origin' });
   const type = response.headers.get('content-type') || '';
   const payload = type.includes('application/json') ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(payload?.detail || payload?.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(payload?.detail || payload?.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 function setButtonBusy(button, busy, label) {
@@ -59,6 +70,68 @@ function nav(view) {
 function setProjectNavActive() {
   document.querySelectorAll('.side-link[data-nav]').forEach((el) => el.classList.toggle('active', el.dataset.nav === 'projects'));
 }
+
+function setAuthMode(mode) {
+  state.authMode = mode;
+  const register = mode === 'register';
+  $('auth-mode-register').classList.toggle('active', register);
+  $('auth-mode-login').classList.toggle('active', !register);
+  $('auth-name-row').classList.toggle('hidden', !register);
+  $('auth-name').required = register;
+  $('auth-password').autocomplete = register ? 'new-password' : 'current-password';
+  $('auth-heading').innerHTML = register ? 'Your research, <em>connected.</em>' : 'Welcome <em>back.</em>';
+  $('auth-submit').innerHTML = register ? 'Create secure workspace <span>↗</span>' : 'Sign in to Nexus <span>↗</span>';
+  $('auth-error').classList.add('hidden');
+}
+function showAuth(mode = 'register') {
+  setAuthMode(mode);
+  $('auth-screen').classList.remove('hidden');
+  document.querySelector('.app-shell').classList.add('hidden');
+}
+function showApp(user) {
+  state.currentUser = user;
+  $('auth-screen').classList.add('hidden');
+  document.querySelector('.app-shell').classList.remove('hidden');
+  $('profile-name').textContent = user.full_name || 'Researcher';
+  $('profile-email').textContent = user.email;
+}
+async function submitAuth(event) {
+  event.preventDefault();
+  const button = $('auth-submit');
+  const mode = state.authMode;
+  const payload = {
+    email: $('auth-email').value.trim(),
+    password: $('auth-password').value,
+  };
+  if (mode === 'register') payload.full_name = $('auth-name').value.trim();
+  setButtonBusy(button, true, mode === 'register' ? 'Creating account…' : 'Signing in…');
+  $('auth-error').classList.add('hidden');
+  try {
+    const result = await api(mode === 'register' ? '/auth/register' : '/auth/login', {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+    showApp(result.user);
+    await loadProjects();
+    toast(mode === 'register' ? 'Your private research workspace is ready.' : 'Welcome back.');
+  } catch (error) {
+    $('auth-error').textContent = error.message;
+    $('auth-error').classList.remove('hidden');
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+async function signOut() {
+  try { await api('/auth/logout', { method: 'POST', body: '{}' }); }
+  catch (error) { toast(error.message, true); }
+  state.currentUser = null;
+  state.projects = [];
+  state.selectedProject = null;
+  state.sources = [];
+  state.messages = [];
+  $('auth-password').value = '';
+  showAuth('login');
+}
+
 
 async function loadProjects() {
   const payload = await api('/projects');
@@ -176,27 +249,62 @@ async function createResearchProject(question) {
   try {
     const created = await api('/projects', { method: 'POST', body: JSON.stringify({ title, research_question: trimmed }) });
     state.selectedProject = created.project;
-    toast('Research workspace created. Collecting sources…');
-    setButtonBusy(button, true, 'Searching sources…');
     const result = await api(`/projects/${created.project.id}/research`, { method: 'POST', body: JSON.stringify({ query: trimmed }) });
     await loadProjects();
     await openProject(created.project.id);
-    toast(`${result.message} Some providers may need API credentials.`);
+    state.activeJobId = result.job_id;
+    showJobStatus('queued', 'Research job queued. The worker is preparing your source collection.');
+    toast('Research queued. You can keep working while the worker collects sources.');
+    monitorResearchJob(result.job_id, created.project.id);
   } catch (error) { toast(error.message, true); }
   finally { setButtonBusy(button, false); }
 }
 async function researchMore() {
   if (!state.selectedProject) return;
   const button = $('project-research-again');
-  setButtonBusy(button, true, 'Searching…');
+  const projectId = state.selectedProject.id;
+  setButtonBusy(button, true, 'Queueing…');
   try {
-    const result = await api(`/projects/${state.selectedProject.id}/research`, { method: 'POST', body: JSON.stringify({ query: state.selectedProject.research_question }) });
-    toast(result.message);
-    await openProject(state.selectedProject.id);
+    const result = await api(`/projects/${projectId}/research`, { method: 'POST', body: JSON.stringify({ query: state.selectedProject.research_question }) });
+    state.activeJobId = result.job_id;
+    showJobStatus('queued', 'Research job queued. You can keep using this workspace.');
     setTab('sources');
-    await loadProjects();
+    toast('Research added to the background queue.');
+    monitorResearchJob(result.job_id, projectId);
   } catch (error) { toast(error.message, true); }
   finally { setButtonBusy(button, false); }
+}
+function showJobStatus(status, message) {
+  const banner = $('job-status-banner');
+  banner.classList.remove('hidden', 'completed', 'failed');
+  if (status === 'completed') banner.classList.add('completed');
+  if (status === 'failed') banner.classList.add('failed');
+  $('job-status-text').textContent = message;
+}
+async function monitorResearchJob(jobId, projectId) {
+  for (let attempt = 0; attempt < 180; attempt++) {
+    try {
+      const payload = await api(`/jobs/${jobId}`);
+      const job = payload.job;
+      const statusMessage = job.status === 'queued' ? 'Research is queued and waiting for a worker…'
+        : job.status === 'running' ? `Collecting and indexing sources · attempt ${job.attempts}`
+        : job.status === 'completed' ? `Completed · ${job.discovered_count} results found, ${job.added_count} new sources added.`
+        : `Research failed: ${job.error_message || 'Worker could not complete this job.'}`;
+      if (state.selectedProject?.id === projectId) showJobStatus(job.status, statusMessage);
+      if (job.status === 'completed') {
+        await loadProjects();
+        if (state.selectedProject?.id === projectId) await openProject(projectId);
+        toast(statusMessage);
+        return;
+      }
+      if (job.status === 'failed') { toast(statusMessage, true); return; }
+    } catch (error) {
+      if (error.status === 401) { showAuth('login'); return; }
+      if (state.selectedProject?.id === projectId) showJobStatus('running', 'Checking research job status…');
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  if (state.selectedProject?.id === projectId) showJobStatus('running', 'This research job is still running. Its status is saved and will update when you reopen the project.');
 }
 function openAddSourceModal() {
   if (!state.selectedProject) return;
@@ -258,7 +366,9 @@ async function generateReport() {
     setTab('draft');
     $('report-output').innerHTML = `<div class="report-markdown">${renderMarkdown(result.report.markdown)}</div>`;
     $('report-actions').classList.remove('hidden');
-    $('download-report').onclick = () => window.location.assign(`${API}/reports/${result.report.id}/download`);
+    $('download-report').onclick = () => window.location.assign(`${API}/reports/${result.report.id}/download?format=md`);
+    $('download-report-docx').onclick = () => window.location.assign(`${API}/reports/${result.report.id}/download?format=docx`);
+    $('download-report-pdf').onclick = () => window.location.assign(`${API}/reports/${result.report.id}/download?format=pdf`);
     toast(result.mode === 'openai' ? 'Research document generated.' : 'Draft generated from source excerpts. Add OPENAI_API_KEY for a synthesized report.');
     await loadProjects();
   } catch (error) { toast(error.message, true); }
@@ -333,13 +443,25 @@ document.querySelectorAll('.filter-chip').forEach(button => button.addEventListe
 $('library-search').addEventListener('input', renderAllSources);
 document.querySelectorAll('.side-link[data-nav]').forEach(button => button.addEventListener('click', () => nav(button.dataset.nav)));
 
+$('auth-form').addEventListener('submit', submitAuth);
+$('auth-mode-login').addEventListener('click', () => setAuthMode('login'));
+$('auth-mode-register').addEventListener('click', () => setAuthMode('register'));
+$('logout-button').addEventListener('click', signOut);
+
 (async function init() {
+  setAuthMode('register');
   try {
-    const [health, connectors] = await Promise.all([api('/health'), api('/connectors')]);
+    await api('/health');
+    const session = await api('/auth/me');
+    showApp(session.user);
+    const connectors = await api('/connectors');
     $('ai-status-dot').style.background = connectors.ai_configured ? '#b8e76a' : '#d9a765';
-    $('ai-status-text').textContent = connectors.ai_configured ? 'AI engine connected' : 'AI key required';
+    $('ai-status-text').textContent = connectors.ai_configured
+      ? (connectors.vector_search ? 'AI + semantic retrieval connected' : 'AI engine connected')
+      : 'AI key required · lexical retrieval active';
     await loadProjects();
   } catch (error) {
-    toast(`Could not connect to the backend: ${error.message}`, true);
+    showAuth('register');
+    if (error.status && error.status !== 401) toast(error.message, true);
   }
 })();

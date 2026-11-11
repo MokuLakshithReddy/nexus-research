@@ -1,127 +1,128 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-import pytest
 from fastapi.testclient import TestClient
-
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "backend"))
 
 from app import db
 from app.main import app
+from conftest import csrf_headers, register
 
 
-@pytest.fixture()
-def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(db, "DB_PATH", tmp_path / "test-nexus.db")
-    with TestClient(app) as test_client:
-        yield test_client
+def create_project(client: TestClient) -> int:
+    response = client.post(
+        "/api/projects",
+        headers=csrf_headers(client),
+        json={
+            "title": "AI and employment research",
+            "research_question": "How is generative AI affecting employment patterns in India?",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["project"]["id"]
 
 
-def test_health_and_connectors(client):
+def test_health_is_public_but_workspace_requires_auth(client):
     assert client.get("/api/health").json()["ok"] is True
-    connectors = client.get("/api/connectors").json()["connectors"]
-    connector_ids = {item["id"] for item in connectors}
-    assert {"openalex", "crossref", "arxiv", "news", "youtube", "x"}.issubset(connector_ids)
+    assert client.get("/api/projects").status_code == 401
+    assert client.get("/api/connectors").status_code == 401
 
 
-def test_project_create_and_detail(client):
-    created = client.post("/api/projects", json={
-        "title": "AI in Indian employment",
-        "research_question": "How is generative AI affecting employment in India?",
-    })
-    assert created.status_code == 201
-    project_id = created.json()["project"]["id"]
-    detail = client.get(f"/api/projects/{project_id}")
-    assert detail.status_code == 200
-    assert detail.json()["project"]["title"] == "AI in Indian employment"
-    assert detail.json()["sources"] == []
+def test_account_registration_and_logout(client):
+    user = register(client)
+    assert user["email"] == "researcher@example.com"
+    assert client.get("/api/auth/me").json()["user"]["id"] == user["id"]
+    logout = client.post("/api/auth/logout", headers=csrf_headers(client), json={})
+    assert logout.status_code == 200
+    assert client.get("/api/projects").status_code == 401
 
 
-def test_unknown_project_is_404(client):
-    response = client.get("/api/projects/999999")
-    assert response.status_code == 404
+def test_project_isolation_between_accounts(client):
+    register(client, "owner@example.com")
+    project_id = create_project(client)
+
+    other = TestClient(app)
+    try:
+        register(other, "different@example.com")
+        assert other.get("/api/projects").json()["projects"] == []
+        assert other.get(f"/api/projects/{project_id}").status_code == 404
+        assert other.get("/api/reports/999").status_code == 404
+    finally:
+        other.close()
 
 
-def test_source_metadata_is_json_serialized(client):
-    created = client.post("/api/projects", json={
-        "title": "Research persistence",
-        "research_question": "How should source metadata be stored safely?",
-    }).json()["project"]
-    inserted = db.add_sources(created["id"], [{
-        "provider": "test", "source_type": "article", "title": "Example source",
-        "url": "https://example.org/paper", "metadata": {"topic": "testing", "rank": 2},
-    }])
-    assert inserted == 1
-    detail = client.get(f"/api/projects/{created['id']}").json()
-    assert detail["sources"][0]["title"] == "Example source"
-    assert detail["sources"][0]["metadata"]["topic"] == "testing"
+def test_research_jobs_are_durable_and_owner_scoped(client):
+    user = register(client)
+    project_id = create_project(client)
+    response = client.post(
+        f"/api/projects/{project_id}/research",
+        headers=csrf_headers(client),
+        json={"query": "generative AI employment", "providers": ["openalex", "arxiv"]},
+    )
+    assert response.status_code == 202
+    job_id = response.json()["job_id"]
+    status_response = client.get(f"/api/jobs/{job_id}")
+    assert status_response.status_code == 200
+    assert status_response.json()["job"]["status"] == "queued"
+
+    claimed = db.claim_next_job()
+    assert claimed and claimed["id"] == job_id
+    db.finish_research_job(job_id, 4, 3, {"openalex": {"status": "connected", "count": 4}})
+    finished = client.get(f"/api/jobs/{job_id}").json()["job"]
+    assert finished["status"] == "completed"
+    assert finished["discovered_count"] == 4
+    assert finished["added_count"] == 3
 
 
-def test_research_chat_summary_and_report_flow(client, monkeypatch):
-    async def fake_research(query, enabled=None):
-        return ([{
-            "provider": "test_provider",
-            "source_type": "research_paper",
-            "title": "An example evidence paper",
-            "url": "https://example.org/research-paper",
-            "authors": "A. Researcher",
-            "published_at": "2025-01-01",
-            "description": "The study reports a measurable change in the selected outcome.",
-            "content": "The study reports a measurable change in the selected outcome across the sampled group. The authors also describe limits in the available data.",
-            "relevance": 0.8,
-            "metadata": {"fixture": True},
-        }], {"test_provider": {"status": "connected", "count": 1}})
+def test_upload_chat_summary_and_exports(client):
+    register(client)
+    project_id = create_project(client)
+    payload = (
+        b"This report examines generative artificial intelligence and the labor market. "
+        b"The authors find that task exposure differs substantially across occupations. "
+        b"The study also warns that exposure does not directly imply job displacement."
+    )
+    upload = client.post(
+        f"/api/projects/{project_id}/sources/upload",
+        headers=csrf_headers(client),
+        files={"file": ("employment-study.txt", payload, "text/plain")},
+    )
+    assert upload.status_code == 201, upload.text
+    detail = client.get(f"/api/projects/{project_id}").json()
+    assert len(detail["sources"]) == 1
 
-    monkeypatch.setattr("app.main.run_research", fake_research)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    project = client.post("/api/projects", json={
-        "title": "Evidence flow test",
-        "research_question": "What does this test study report about the selected outcome?",
-    }).json()["project"]
-    project_id = project["id"]
-
-    research = client.post(f"/api/projects/{project_id}/research", json={})
-    assert research.status_code == 200
-    assert research.json()["added"] == 1
-
-    chat = client.post(f"/api/projects/{project_id}/chat", json={"message": "What did the study find?"})
+    chat = client.post(
+        f"/api/projects/{project_id}/chat",
+        headers=csrf_headers(client),
+        json={"message": "What does the uploaded study say about task exposure?"},
+    )
     assert chat.status_code == 200
     assert "Source 1" in chat.json()["answer"]
 
-    summary = client.post(f"/api/projects/{project_id}/summarize")
+    summary = client.post(f"/api/projects/{project_id}/summarize", headers=csrf_headers(client), json={})
     assert summary.status_code == 200
     assert summary.json()["source_count"] == 1
 
-    report = client.post(f"/api/projects/{project_id}/reports", json={})
-    assert report.status_code == 201
-    report_id = report.json()["report"]["id"]
-    download = client.get(f"/api/reports/{report_id}/download")
-    assert download.status_code == 200
-    assert "References" in download.text
+    generated = client.post(f"/api/projects/{project_id}/reports", headers=csrf_headers(client), json={})
+    assert generated.status_code == 201
+    report_id = generated.json()["report"]["id"]
+
+    markdown = client.get(f"/api/reports/{report_id}/download?format=md")
+    docx = client.get(f"/api/reports/{report_id}/download?format=docx")
+    pdf = client.get(f"/api/reports/{report_id}/download?format=pdf")
+    assert markdown.status_code == docx.status_code == pdf.status_code == 200
+    assert "References" in markdown.text
+    assert docx.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert pdf.headers["content-type"] == "application/pdf"
 
 
-def test_frontend_and_assets_are_served(client):
+def test_frontend_and_static_assets_are_served(client):
     page = client.get("/")
     assert page.status_code == 200
     assert "Nexus Research" in page.text
+    assert "auth-screen" in page.text
     assert client.get("/assets/app.js").status_code == 200
     assert client.get("/assets/styles.css").status_code == 200
 
 
-def test_text_document_upload_is_indexed(client):
-    project = client.post("/api/projects", json={
-        "title": "Document import test",
-        "research_question": "What is contained in this uploaded document?",
-    }).json()["project"]
-    text = b"This document contains a substantial amount of useful research text for the test. It includes evidence, scope and a concise conclusion for extraction."
-    response = client.post(
-        f"/api/projects/{project['id']}/sources/upload",
-        files={"file": ("field-notes.txt", text, "text/plain")},
-    )
-    assert response.status_code == 201
-    detail = client.get(f"/api/projects/{project['id']}").json()
-    assert len(detail["sources"]) == 1
-    assert detail["sources"][0]["title"] == "field-notes.txt"
+def test_unknown_job_does_not_leak_data(client):
+    register(client)
+    assert client.get("/api/jobs/not-a-real-job").status_code == 404
