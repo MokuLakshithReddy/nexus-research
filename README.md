@@ -2,9 +2,9 @@
 
 Nexus Research is a source-grounded workspace for collecting evidence from multiple providers, asking questions across a research library, and producing cited reports.
 
-**Version 2** adds account-isolated workspaces, PostgreSQL persistence, a durable research-job queue, chunk-based retrieval with pgvector, and Markdown/DOCX/PDF exports.
+**Version 3** adds a claim-level evidence ledger, auditable source-passage links, researcher review decisions, and content-addressed research snapshots on top of V2's secure workspaces and durable collection pipeline.
 
-## What works in V2
+## What works in V3
 
 - **Accounts and isolation:** sign up/sign in with Argon2 password hashes, HttpOnly session cookies, CSRF validation, and owner-scoped project/source/message/report/job reads and writes.
 - **Research projects:** create independent research workspaces with a question, source library, chat history and saved reports.
@@ -14,6 +14,9 @@ Nexus Research is a source-grounded workspace for collecting evidence from multi
 - **Research chat and reports:** model-powered responses cite source IDs and are instructed to treat source text as untrusted evidence. Without an LLM key, the app labels its output as an extractive fallback.
 - **Document imports:** PDF, DOCX, TXT, Markdown and public readable webpages.
 - **Exports:** Markdown, DOCX and PDF.
+- **Evidence ledger:** extractive claim candidates or optional structured LLM mapping, with exact stored passage excerpts linked by source and chunk ID.
+- **Evidence review:** source relationships are labelled as support, contradiction or context; human review state is separate from machine assessment.
+- **Research snapshots:** capture a manifest with SHA-256 hashes for stored source text and a canonical corpus digest; unchanged corpora resolve to the same snapshot record.
 - **Operations:** Docker Compose with PostgreSQL/pgvector, a separate worker, and Alembic schema migration.
 
 ## Quick start: local development
@@ -116,7 +119,15 @@ The test suite covers authentication, owner isolation, CSRF-protected writes, du
             ├── chunk and embed
             └── complete / retry / recover
 
-See docs/ARCHITECTURE.md, docs/CONNECTORS.md, docs/OPERATIONS.md, and docs/EVALUATION.md.
+See docs/ARCHITECTURE.md, docs/CONNECTORS.md, docs/OPERATIONS.md, docs/EVALUATION.md, and docs/EVIDENCE_LEDGER.md.
+
+## V3 evidence and reproducibility notes
+
+- Extractive mode stores sentences as **context-only candidates**. It does not infer that an extracted sentence is supported, verified, or true.
+- Optional model links are accepted only when source IDs and chunk indexes exist in the same project and the quoted passage is found verbatim in the stored chunk.
+- Model assessments remain provisional. Researchers explicitly mark a claim confirmed, rejected, or unreviewed.
+- Snapshot digests represent the stored corpus and project metadata at capture time. They do not prove a publisher page has not changed elsewhere, nor do they certify the truth of any claim.
+- A snapshot is a reproducibility manifest, not an immutable third-party archive. Original source URLs remain the authoritative publisher records.
 
 ## Important limitations
 

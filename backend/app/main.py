@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import db
 from .database import initialize_database
+from .evidence import analyze_project_evidence
 from .research.providers import PROVIDERS
 from .security import (
     clear_session, enforce_same_origin, get_current_user, hash_password,
@@ -45,8 +46,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Nexus Research API",
-    version="0.2.0",
-    description="Multi-user, source-grounded research workspace with durable collection jobs and hybrid retrieval.",
+    version="0.3.0",
+    description="Multi-user research workspace with durable collection, evidence review, hybrid retrieval, and reproducible snapshots.",
     lifespan=lifespan,
 )
 
@@ -83,6 +84,9 @@ class ChatRequest(BaseModel):
 
 class ReportRequest(BaseModel):
     title: str | None = Field(default=None, max_length=180)
+
+class ClaimReviewRequest(BaseModel):
+    review_status: str = Field(pattern="^(unreviewed|confirmed|rejected)$")
 
 
 def ensure_project(user: dict[str, Any], project_id: int) -> dict[str, Any]:
@@ -379,6 +383,80 @@ async def upload_document(
             from .services import index_source
             await index_source(owner_id, project_id, stored)
     return {"added": bool(added), "message": "Document imported and indexed in this workspace." if added else "That filename is already in this workspace."}
+
+
+
+
+@app.get("/api/projects/{project_id}/evidence")
+def get_evidence_ledger(
+    project_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    ensure_project(user, project_id)
+    return db.list_evidence_claims(int(user["id"]), project_id)
+
+
+@app.post("/api/projects/{project_id}/evidence/analyze")
+async def analyze_evidence_ledger(
+    project_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf),
+):
+    ensure_project(user, project_id)
+    try:
+        return await analyze_project_evidence(int(user["id"]), project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Research project not found.") from exc
+
+
+@app.patch("/api/projects/{project_id}/evidence/claims/{claim_id}/review")
+def review_evidence_claim(
+    project_id: int,
+    claim_id: int,
+    payload: ClaimReviewRequest,
+    user: dict[str, Any] = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf),
+):
+    ensure_project(user, project_id)
+    claim = db.update_claim_review(int(user["id"]), project_id, claim_id, payload.review_status)
+    if claim is None:
+        raise HTTPException(status_code=404, detail="Evidence claim not found.")
+    return {"claim": claim}
+
+
+@app.get("/api/projects/{project_id}/snapshots")
+def list_research_snapshots(
+    project_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    ensure_project(user, project_id)
+    return {"snapshots": db.list_project_snapshots(int(user["id"]), project_id)}
+
+
+@app.post("/api/projects/{project_id}/snapshots", status_code=201)
+def create_research_snapshot(
+    project_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+    _csrf: None = Depends(require_csrf),
+):
+    ensure_project(user, project_id)
+    snapshot = db.create_project_snapshot(int(user["id"]), project_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Research project not found.")
+    return {"snapshot": snapshot}
+
+
+@app.get("/api/projects/{project_id}/snapshots/{snapshot_id}")
+def get_research_snapshot(
+    project_id: int,
+    snapshot_id: int,
+    user: dict[str, Any] = Depends(get_current_user),
+):
+    ensure_project(user, project_id)
+    snapshot = db.get_project_snapshot(int(user["id"]), project_id, snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Research snapshot not found.")
+    return {"snapshot": snapshot}
 
 
 @app.post("/api/projects/{project_id}/chat")

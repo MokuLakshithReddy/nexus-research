@@ -465,3 +465,182 @@ $('logout-button').addEventListener('click', signOut);
     if (error.status && error.status !== 401) toast(error.message, true);
   }
 })();
+
+
+// V3: claim-level evidence review and reproducible research snapshots.
+const evidenceUiState = { claims: [], snapshots: [], summary: {} };
+
+function evidenceBadge(value) {
+  const labels = {
+    needs_review: "Needs review", support_indicated: "Support indicated",
+    contradicted: "Contradicted signal", contested: "Contested signal",
+    confirmed: "Researcher confirmed", rejected: "Researcher rejected",
+    unreviewed: "Not reviewed", supports: "Supports",
+    contradicts: "Contradicts", context: "Context only"
+  };
+  return labels[value] || value || "Unknown";
+}
+
+function renderEvidenceLedger() {
+  const claimsNode = $("evidence-claims");
+  const summary = evidenceUiState.summary || {};
+  const claims = evidenceUiState.claims || [];
+  const stats = [
+    [summary.total || claims.length, "CLAIMS"],
+    [summary.reviewed || 0, "REVIEWED"],
+    [summary.contested || 0, "CONTESTED"],
+    [summary.needs_review || 0, "NEEDS REVIEW"]
+  ];
+  $("evidence-tab-count").textContent = summary.total || claims.length;
+  $("evidence-stats").innerHTML = stats.map(item =>
+    "<div><strong>" + Number(item[0]) + "</strong><span>" + item[1] + "</span></div>"
+  ).join("");
+
+  if (!claims.length) {
+    claimsNode.innerHTML = '<div class="panel-empty">No claim candidates yet. Run evidence analysis after collecting sources.</div>';
+  } else {
+    claimsNode.innerHTML = claims.map(claim => {
+      const evidence = (claim.evidence || []).map(link => {
+        const external = /^https?:\\/\\//i.test(link.source_url || "");
+        const title = escapeHtml(link.source_title || ("Source " + link.source_id));
+        const sourceLink = external
+          ? '<a href="' + escapeHtml(link.source_url) + '" target="_blank" rel="noopener noreferrer">' + title + ' ↗</a>'
+          : "<span>" + title + "</span>";
+        return '<article class="evidence-link evidence-relation-' + escapeHtml(link.relation) + '">' +
+          '<div class="evidence-link-top"><span class="evidence-relation">' + escapeHtml(evidenceBadge(link.relation)) +
+          '</span><span class="evidence-ref">SOURCE ' + Number(link.source_id) + " · CHUNK " + Number(link.chunk_index) + "</span></div>" +
+          "<blockquote>" + escapeHtml(link.excerpt || "") + "</blockquote>" +
+          '<div class="evidence-source-row">' + sourceLink + "<span>" +
+          escapeHtml(link.provider || "source").replaceAll("_", " ").toUpperCase() + "</span></div>" +
+          (link.rationale ? '<p class="evidence-rationale">' + escapeHtml(link.rationale) + "</p>" : "") +
+          "</article>";
+      }).join("");
+      const actions = ["confirmed", "rejected", "unreviewed"].map(status => {
+        const label = status === "confirmed" ? "Confirm" : status === "rejected" ? "Reject" : "Reset review";
+        return '<button type="button" class="review-action ' + (claim.review_status === status ? "selected" : "") +
+          '" data-review-claim="' + Number(claim.id) + '" data-review-status="' + status + '">' + label + "</button>";
+      }).join("");
+      return '<article class="evidence-claim-card">' +
+        '<div class="evidence-claim-head"><span class="evidence-label">CLAIM ' + Number(claim.id) + '</span><div class="evidence-badges">' +
+        '<span class="evidence-badge assessment-' + escapeHtml(claim.assessment) + '">' + escapeHtml(evidenceBadge(claim.assessment)) + "</span>" +
+        '<span class="evidence-badge review-' + escapeHtml(claim.review_status) + '">' + escapeHtml(evidenceBadge(claim.review_status)) +
+        "</span></div></div>" +
+        '<p class="evidence-claim-text">' + escapeHtml(claim.text) + "</p>" +
+        '<div class="evidence-claim-meta"><span>' + escapeHtml(claim.extraction_method || "unknown") + " extraction</span><span>" +
+        (claim.evidence || []).length + " linked passage(s)</span></div>" +
+        '<div class="evidence-links">' + (evidence || '<p class="panel-empty">No linked passages were retained.</p>') + "</div>" +
+        '<div class="evidence-review-row"><span class="evidence-review-label">RESEARCHER REVIEW</span>' + actions + "</div></article>";
+    }).join("");
+  }
+
+  const snapshots = evidenceUiState.snapshots || [];
+  $("snapshot-list").innerHTML = snapshots.length ? snapshots.map(snapshot =>
+    '<article class="snapshot-row"><div class="snapshot-mark">⌁</div><div class="snapshot-copy">' +
+    "<strong>Snapshot #" + Number(snapshot.id) + "</strong><span>" + Number(snapshot.source_count) +
+    " sources · " + Number(snapshot.chunk_count) + " indexed chunks · " + displayDate(snapshot.created_at) +
+    '</span><code>' + escapeHtml(snapshot.digest) + "</code></div>" +
+    '<button type="button" class="outline-button snapshot-download" data-snapshot-download="' +
+    Number(snapshot.id) + '">View manifest ↗</button></article>'
+  ).join("") : '<div class="panel-empty">No snapshots captured yet.</div>';
+}
+
+async function loadV3Evidence() {
+  const projectId = state.selectedProject && state.selectedProject.id;
+  if (!projectId) return;
+  $("evidence-claims").innerHTML = '<div class="panel-empty">Loading the evidence ledger…</div>';
+  try {
+    const results = await Promise.all([
+      api("/projects/" + projectId + "/evidence"),
+      api("/projects/" + projectId + "/snapshots")
+    ]);
+    if (!state.selectedProject || state.selectedProject.id !== projectId) return;
+    evidenceUiState.claims = results[0].claims || [];
+    evidenceUiState.summary = results[0].summary || {};
+    evidenceUiState.snapshots = results[1].snapshots || [];
+    renderEvidenceLedger();
+  } catch (error) {
+    $("evidence-claims").innerHTML = '<div class="panel-empty">' + escapeHtml(error.message) + "</div>";
+  }
+}
+
+async function analyzeV3Evidence() {
+  if (!state.selectedProject) return;
+  const button = $("analyze-evidence");
+  setButtonBusy(button, true, "Mapping claims…");
+  try {
+    const result = await api("/projects/" + state.selectedProject.id + "/evidence/analyze", {
+      method: "POST", body: JSON.stringify({})
+    });
+    await loadV3Evidence();
+    toast(result.message || "Evidence analysis finished.");
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+async function captureV3Snapshot() {
+  if (!state.selectedProject) return;
+  const button = $("create-snapshot");
+  setButtonBusy(button, true, "Capturing…");
+  try {
+    const result = await api("/projects/" + state.selectedProject.id + "/snapshots", {
+      method: "POST", body: JSON.stringify({})
+    });
+    await loadV3Evidence();
+    toast("Research snapshot " + result.snapshot.digest.slice(0, 12) + " captured.");
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    setButtonBusy(button, false);
+  }
+}
+
+async function updateV3ClaimReview(claimId, reviewStatus, button) {
+  if (!state.selectedProject) return;
+  button.disabled = true;
+  try {
+    await api("/projects/" + state.selectedProject.id + "/evidence/claims/" + claimId + "/review", {
+      method: "PATCH", body: JSON.stringify({ review_status: reviewStatus })
+    });
+    await loadV3Evidence();
+    toast("Claim review set to " + reviewStatus.replaceAll("_", " ") + ".");
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function downloadV3Snapshot(snapshotId) {
+  if (!state.selectedProject) return;
+  try {
+    const result = await api("/projects/" + state.selectedProject.id + "/snapshots/" + snapshotId);
+    const blob = new Blob([JSON.stringify(result.snapshot.manifest, null, 2)], { type: "application/json" });
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = "nexus-project-" + state.selectedProject.id + "-snapshot-" + snapshotId + ".json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+document.querySelectorAll('.workspace-tab[data-tab="evidence"]').forEach(button => {
+  button.addEventListener("click", loadV3Evidence);
+});
+$("analyze-evidence")?.addEventListener("click", analyzeV3Evidence);
+$("create-snapshot")?.addEventListener("click", captureV3Snapshot);
+$("evidence-claims")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-review-claim]");
+  if (button) updateV3ClaimReview(Number(button.dataset.reviewClaim), button.dataset.reviewStatus, button);
+});
+$("snapshot-list")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-snapshot-download]");
+  if (button) downloadV3Snapshot(Number(button.dataset.snapshotDownload));
+});
