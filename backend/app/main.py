@@ -5,7 +5,7 @@ import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from xml.sax.saxutils import escape as xml_escape
 
 from dotenv import load_dotenv
@@ -86,7 +86,7 @@ class ReportRequest(BaseModel):
     title: str | None = Field(default=None, max_length=180)
 
 class ClaimReviewRequest(BaseModel):
-    review_status: str = Field(pattern="^(unreviewed|confirmed|rejected)$")
+    review_status: Literal["unreviewed", "confirmed", "rejected"]
 
 
 def ensure_project(user: dict[str, Any], project_id: int) -> dict[str, Any]:
