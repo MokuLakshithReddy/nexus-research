@@ -114,3 +114,35 @@ a{color:inherit;text-decoration:none}
 @media(max-width:1120px){.workspace-body{grid-template-columns:minmax(0,1fr) 290px;gap:12px}.project-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:900px){.app-shell{grid-template-columns:66px minmax(0,1fr)}.sidebar{padding:21px 8px}.brand{padding:0 10px}.brand-name,.workspace-copy,.chevron,.side-label,.side-count,.project-list-section,.sidebar-profile>div:nth-child(2),.more-dots{display:none}.workspace-switcher{justify-content:center;padding:8px 4px}.side-link{justify-content:center;padding:11px 7px;font-size:0}.nav-icon{font-size:17px}.sidebar-profile{justify-content:center;padding:14px 0 0}.workspace-body{grid-template-columns:1fr}.copilot-panel{position:relative;top:0;max-height:none;min-height:430px}.project-header{align-items:flex-start;flex-direction:column}.project-header-actions{align-self:flex-end}.page-content,.project-view,.library-view{padding-left:25px;padding-right:25px}}
 @media(max-width:620px){.topbar{height:58px;padding:0 16px}.top-actions{gap:9px}.api-status{display:none}.new-project-button{font-size:9px;padding:9px 10px}.page-content,.project-view,.library-view{padding:34px 16px}.hero-intro h1{font-size:38px}.hero-subtitle{font-size:11px}.launcher-hint{display:none}.launcher-footer{align-items:flex-end;flex-direction:column}.launcher-footer .primary-button{width:100%}.source-chips{width:100%}.stats-grid{grid-template-columns:1fr 1fr}.stats-grid .stat-card:last-child{grid-column:span 2}.project-grid{grid-template-columns:1fr}.section-heading{align-items:flex-end}.project-header{padding-bottom:19px}.project-heading-copy h1{font-size:26px}.project-header-actions{width:100%;align-self:stretch}.project-header-actions button{flex:1}.workspace-tabs{gap:17px;overflow:auto}.workspace-tab{white-space:nowrap}.project-metrics{grid-template-columns:1fr 1fr}.workspace-body{padding-top:12px}.content-panel{padding:13px}.source-row{grid-template-columns:25px minmax(0,1fr) auto}.source-search-wrap input{width:130px}.sources-toolbar{align-items:flex-start;flex-direction:column}.project-view .app-footer{margin-left:-16px;margin-right:-16px}.report-library-grid{grid-template-columns:1fr}.app-footer{padding-left:16px;padding-right:16px;font-size:7px}.connector-grid{grid-template-columns:1fr}.page-content .overview-section{margin-top:28px}}
+
+
+/* Version 2: account gate and durable research-job state */
+.auth-screen{min-height:100vh;display:grid;place-items:center;padding:36px 18px;position:relative;overflow:hidden;background:radial-gradient(ellipse at 48% 12%,rgba(197,243,106,.075),transparent 42%),#101114}
+.auth-card{position:relative;z-index:2;width:min(460px,100%);border:1px solid #34383f;background:rgba(24,26,31,.94);border-radius:17px;padding:29px 30px 25px;box-shadow:0 35px 110px rgba(0,0,0,.46)}
+.auth-brand{display:flex;align-items:center;gap:11px;margin-bottom:38px}
+.auth-card h1{font:600 30px/1.12 Manrope,sans-serif;letter-spacing:-1.4px;margin:13px 0 8px}
+.auth-card h1 em{font-style:normal;color:var(--accent)}
+.auth-lead{font-size:11px;line-height:1.65;color:#9599a2;margin:0 0 22px}
+.auth-switch{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#111317;border:1px solid #2c3037;border-radius:9px;margin-bottom:20px}
+.auth-switch button{border:0;background:transparent;color:#858a94;border-radius:6px;padding:9px;font-size:10px}
+.auth-switch button.active{background:#292e22;color:#d9f5ad;box-shadow:inset 0 0 0 1px #48563b}
+.auth-form{display:grid;gap:13px}
+.auth-form label{display:grid;gap:6px;font-size:10px;color:#b0b3bc}
+.auth-form input{width:100%;border:1px solid #383d46;background:#131519;border-radius:8px;padding:11px 12px;color:#f0f1ed;font-size:11px;outline:none}
+.auth-form input:focus{border-color:#8ca765;box-shadow:0 0 0 3px rgba(197,243,106,.07)}
+.auth-form input::placeholder{color:#606570}
+.auth-submit{width:100%;margin-top:4px;padding:12px}
+.auth-error{font-size:10px;color:#ffb3b3;background:#382525;border:1px solid #744141;border-radius:7px;padding:8px 10px;margin:0}
+.auth-footnote{font-size:8px;line-height:1.6;color:#696e78;margin:17px 0 0}
+.auth-orbit{position:absolute;border:1px solid rgba(197,243,106,.07);border-radius:50%;pointer-events:none}
+.orbit-one{width:560px;height:560px;right:-240px;top:-310px;box-shadow:0 0 0 35px rgba(197,243,106,.012),0 0 0 75px rgba(197,243,106,.009)}
+.orbit-two{width:440px;height:440px;left:-250px;bottom:-270px;box-shadow:0 0 0 28px rgba(197,243,106,.014)}
+.signout-button{border:1px solid #343841;background:#1c1f24;color:#90959e;border-radius:7px;width:27px;height:27px;font-size:12px}
+.signout-button:hover{color:var(--accent);border-color:#63734c}
+.job-status-banner{display:flex;align-items:center;gap:9px;margin:0 0 12px;padding:9px 12px;border:1px solid #57503c;background:#29271f;border-radius:8px;font-size:9px;color:#d7c9a7}
+.job-status-dot{width:7px;height:7px;border-radius:50%;background:#e0bd73;box-shadow:0 0 0 4px rgba(224,189,115,.09);flex-shrink:0}
+.job-status-banner.completed{border-color:#43553a;background:#20271d;color:#c8dfa9}
+.job-status-banner.completed .job-status-dot{background:#b9e27d;box-shadow:0 0 0 4px rgba(185,226,125,.09)}
+.job-status-banner.failed{border-color:#704343;background:#2b2020;color:#f0b0b0}
+.job-status-banner.failed .job-status-dot{background:#ee8c8c;box-shadow:0 0 0 4px rgba(238,140,140,.09)}
+@media(max-width:520px){.auth-card{padding:24px 19px}.auth-card h1{font-size:27px}}
