@@ -129,3 +129,53 @@ Index(
     postgresql_using="hnsw",
     postgresql_ops={"embedding": "vector_cosine_ops"},
 )
+
+
+class EvidenceClaim(Base):
+    __tablename__ = "evidence_claims"
+    __table_args__ = (UniqueConstraint("project_id", "claim_key", name="uq_evidence_claim_project_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    claim_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    assessment: Mapped[str] = mapped_column(String(32), nullable=False, default="needs_review")
+    extraction_method: Mapped[str] = mapped_column(String(40), nullable=False, default="extractive")
+    review_status: Mapped[str] = mapped_column(String(24), nullable=False, default="unreviewed")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ClaimEvidence(Base):
+    __tablename__ = "claim_evidence"
+    __table_args__ = (
+        UniqueConstraint("claim_id", "source_id", "chunk_index", name="uq_claim_evidence_passage"),
+        CheckConstraint("relation IN ('supports', 'contradicts', 'context')", name="ck_claim_evidence_relation"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    claim_id: Mapped[int] = mapped_column(ForeignKey("evidence_claims.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    relation: Mapped[str] = mapped_column(String(16), nullable=False, default="context")
+    excerpt: Mapped[str] = mapped_column(Text, nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ResearchSnapshot(Base):
+    __tablename__ = "research_snapshots"
+    __table_args__ = (UniqueConstraint("project_id", "digest", name="uq_snapshot_project_digest"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    manifest_json: Mapped[dict[str, Any]] = mapped_column("manifest", JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+Index("ix_claims_project_created", EvidenceClaim.project_id, EvidenceClaim.created_at)
+Index("ix_claim_evidence_source", ClaimEvidence.source_id, ClaimEvidence.claim_id)
+Index("ix_snapshots_project_created", ResearchSnapshot.project_id, ResearchSnapshot.created_at)

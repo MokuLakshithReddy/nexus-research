@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import aliased
 
 from .database import SessionLocal
-from .models import Message, Project, Report, ResearchJob, Source, SourceChunk, User
+from .models import ClaimEvidence, EvidenceClaim, Message, Project, Report, ResearchJob, ResearchSnapshot, Source, SourceChunk, User
 
 
 def _user_dict(row: User | None) -> dict[str, Any] | None:
@@ -387,3 +387,196 @@ def search_chunks(owner_id: int, project_id: int, query: str,
              "source_type": source.source_type, "score": float(score)}
             for score, chunk, source in ranked[:limit]
         ]
+
+
+# V3 evidence ledger and immutable research snapshots
+def list_project_chunks(owner_id: int, project_id: int, limit: int = 600) -> list[dict[str, Any]]:
+    safe_limit = max(1, min(int(limit), 2000))
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(SourceChunk, Source)
+            .join(Source, Source.id == SourceChunk.source_id)
+            .join(Project, Project.id == SourceChunk.project_id)
+            .where(Project.owner_id == owner_id, SourceChunk.project_id == project_id)
+            .order_by(Source.id.asc(), SourceChunk.chunk_index.asc())
+            .limit(safe_limit)
+        ).all()
+        return [
+            {"source_id": source.id, "chunk_index": chunk.chunk_index, "content": chunk.content,
+             "title": source.title, "url": source.url, "provider": source.provider,
+             "published_at": source.published_at, "source_type": source.source_type}
+            for chunk, source in rows
+        ]
+
+
+def save_evidence_analysis(owner_id: int, project_id: int, items: list[dict[str, Any]], extraction_method: str) -> dict[str, int]:
+    import hashlib
+    import re
+    created_claims = 0
+    created_links = 0
+    with SessionLocal() as session:
+        project = session.scalar(select(Project).where(Project.id == project_id, Project.owner_id == owner_id))
+        if not project:
+            raise ValueError("Project not found.")
+        for item in items[:60]:
+            claim_text = re.sub(r"\s+", " ", str(item.get("text") or "")).strip()[:1800]
+            if len(claim_text) < 24:
+                continue
+            normalized = re.sub(r"[^a-z0-9]+", " ", claim_text.lower()).strip()
+            claim_key = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+            claim = session.scalar(select(EvidenceClaim).where(
+                EvidenceClaim.project_id == project_id, EvidenceClaim.claim_key == claim_key))
+            if claim is None:
+                claim = EvidenceClaim(project_id=project_id, text=claim_text, claim_key=claim_key,
+                    assessment=str(item.get("assessment") or "needs_review"), extraction_method=extraction_method,
+                    review_status="unreviewed")
+                session.add(claim)
+                session.flush()
+                created_claims += 1
+            else:
+                claim.assessment = str(item.get("assessment") or "needs_review")
+                claim.extraction_method = extraction_method
+                claim.text = claim_text
+            for evidence in item.get("evidence") or []:
+                try:
+                    source_id, chunk_index = int(evidence.get("source_id")), int(evidence.get("chunk_index"))
+                except (TypeError, ValueError):
+                    continue
+                relation = str(evidence.get("relation") or "context")
+                if relation not in {"supports", "contradicts", "context"}:
+                    continue
+                source = session.scalar(select(Source).where(Source.id == source_id, Source.project_id == project_id))
+                chunk = session.scalar(select(SourceChunk).where(
+                    SourceChunk.source_id == source_id, SourceChunk.project_id == project_id,
+                    SourceChunk.chunk_index == chunk_index))
+                if source is None or chunk is None:
+                    continue
+                excerpt = re.sub(r"\s+", " ", str(evidence.get("excerpt") or chunk.content)).strip()
+                normalized_chunk = re.sub(r"\s+", " ", chunk.content).strip()
+                if excerpt and excerpt[:900].lower() not in normalized_chunk.lower():
+                    excerpt = normalized_chunk[:900]
+                else:
+                    excerpt = excerpt[:900]
+                existing = session.scalar(select(ClaimEvidence).where(
+                    ClaimEvidence.claim_id == claim.id, ClaimEvidence.source_id == source_id,
+                    ClaimEvidence.chunk_index == chunk_index))
+                if existing is None:
+                    session.add(ClaimEvidence(claim_id=claim.id, source_id=source_id, chunk_index=chunk_index,
+                        relation=relation, excerpt=excerpt or normalized_chunk[:900],
+                        rationale=str(evidence.get("rationale") or "")[:800]))
+                    created_links += 1
+                else:
+                    existing.relation = relation
+                    existing.excerpt = excerpt or normalized_chunk[:900]
+                    existing.rationale = str(evidence.get("rationale") or "")[:800]
+        session.commit()
+    return {"new_claims": created_claims, "new_evidence_links": created_links}
+
+
+def list_evidence_claims(owner_id: int, project_id: int) -> dict[str, Any]:
+    with SessionLocal() as session:
+        claims = session.scalars(select(EvidenceClaim).join(Project, Project.id == EvidenceClaim.project_id)
+            .where(Project.owner_id == owner_id, EvidenceClaim.project_id == project_id)
+            .order_by(EvidenceClaim.created_at.desc(), EvidenceClaim.id.desc()).limit(250)).all()
+        claim_ids = [claim.id for claim in claims]
+        grouped: dict[int, list[dict[str, Any]]] = {claim_id: [] for claim_id in claim_ids}
+        if claim_ids:
+            rows = session.execute(select(ClaimEvidence, Source).join(Source, Source.id == ClaimEvidence.source_id)
+                .join(EvidenceClaim, EvidenceClaim.id == ClaimEvidence.claim_id)
+                .join(Project, Project.id == EvidenceClaim.project_id)
+                .where(Project.owner_id == owner_id, EvidenceClaim.project_id == project_id,
+                    ClaimEvidence.claim_id.in_(claim_ids), Source.project_id == project_id)
+                .order_by(ClaimEvidence.id.asc())).all()
+            for link, source in rows:
+                grouped[link.claim_id].append({
+                    "source_id": source.id, "source_title": source.title, "source_url": source.url,
+                    "provider": source.provider, "published_at": source.published_at,
+                    "chunk_index": link.chunk_index, "relation": link.relation,
+                    "excerpt": link.excerpt, "rationale": link.rationale})
+        items = [{
+            "id": claim.id, "text": claim.text, "assessment": claim.assessment,
+            "extraction_method": claim.extraction_method, "review_status": claim.review_status,
+            "created_at": claim.created_at.isoformat() if claim.created_at else None,
+            "updated_at": claim.updated_at.isoformat() if claim.updated_at else None,
+            "evidence": grouped.get(claim.id, [])} for claim in claims]
+        return {"claims": items, "summary": {
+            "total": len(items), "reviewed": sum(1 for item in items if item["review_status"] != "unreviewed"),
+            "contested": sum(1 for item in items if item["assessment"] == "contested"),
+            "needs_review": sum(1 for item in items if item["review_status"] == "unreviewed")}}
+
+
+def update_claim_review(owner_id: int, project_id: int, claim_id: int, review_status: str) -> dict[str, Any] | None:
+    if review_status not in {"unreviewed", "confirmed", "rejected"}:
+        raise ValueError("Review status must be unreviewed, confirmed, or rejected.")
+    with SessionLocal() as session:
+        claim = session.scalar(select(EvidenceClaim).join(Project, Project.id == EvidenceClaim.project_id).where(
+            EvidenceClaim.id == claim_id, EvidenceClaim.project_id == project_id, Project.owner_id == owner_id))
+        if claim is None:
+            return None
+        claim.review_status = review_status
+        session.commit()
+        session.refresh(claim)
+        return {"id": claim.id, "text": claim.text, "assessment": claim.assessment,
+            "extraction_method": claim.extraction_method, "review_status": claim.review_status}
+
+
+def _snapshot_dict(row: ResearchSnapshot, include_manifest: bool = False) -> dict[str, Any]:
+    item = {"id": row.id, "project_id": row.project_id, "digest": row.digest,
+        "source_count": row.source_count, "chunk_count": row.chunk_count,
+        "created_at": row.created_at.isoformat() if row.created_at else None}
+    if include_manifest:
+        item["manifest"] = row.manifest_json or {}
+    return item
+
+
+def create_project_snapshot(owner_id: int, project_id: int) -> dict[str, Any] | None:
+    import hashlib
+    import json
+    with SessionLocal() as session:
+        project = session.scalar(select(Project).where(Project.id == project_id, Project.owner_id == owner_id))
+        if project is None:
+            return None
+        sources = session.scalars(select(Source).where(Source.project_id == project_id).order_by(Source.id.asc())).all()
+        chunk_count = session.scalar(select(func.count(SourceChunk.id)).where(SourceChunk.project_id == project_id)) or 0
+        created_at = datetime.now(timezone.utc).isoformat()
+        source_manifest = []
+        for source in sources:
+            body = source.content or ""
+            source_manifest.append({
+                "source_id": source.id, "title": source.title, "url": source.url, "provider": source.provider,
+                "source_type": source.source_type, "authors": source.authors, "published_at": source.published_at,
+                "content_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+                "content_characters": len(body), "metadata": source.metadata_json or {}})
+        manifest = {"schema": "nexus-research-snapshot/v1", "created_at": created_at,
+            "project": {"id": project.id, "title": project.title, "research_question": project.research_question,
+                "description": project.description}, "source_count": len(source_manifest),
+            "indexed_chunk_count": int(chunk_count), "sources": source_manifest,
+            "integrity_note": "SHA-256 hashes cover stored source text and canonical manifest metadata; they do not prove an external publisher page will remain unchanged."}
+        digest_payload = {key: value for key, value in manifest.items() if key != "created_at"}
+        canonical = json.dumps(digest_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        existing = session.scalar(select(ResearchSnapshot).where(
+            ResearchSnapshot.project_id == project_id, ResearchSnapshot.digest == digest))
+        if existing is not None:
+            return _snapshot_dict(existing, include_manifest=True)
+        row = ResearchSnapshot(project_id=project_id, digest=digest, source_count=len(source_manifest),
+            chunk_count=int(chunk_count), manifest_json=manifest)
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _snapshot_dict(row, include_manifest=True)
+
+
+def list_project_snapshots(owner_id: int, project_id: int) -> list[dict[str, Any]]:
+    with SessionLocal() as session:
+        rows = session.scalars(select(ResearchSnapshot).join(Project, Project.id == ResearchSnapshot.project_id)
+            .where(Project.owner_id == owner_id, ResearchSnapshot.project_id == project_id)
+            .order_by(ResearchSnapshot.id.desc()).limit(100)).all()
+        return [_snapshot_dict(row) for row in rows]
+
+
+def get_project_snapshot(owner_id: int, project_id: int, snapshot_id: int) -> dict[str, Any] | None:
+    with SessionLocal() as session:
+        row = session.scalar(select(ResearchSnapshot).join(Project, Project.id == ResearchSnapshot.project_id).where(
+            ResearchSnapshot.id == snapshot_id, ResearchSnapshot.project_id == project_id, Project.owner_id == owner_id))
+        return _snapshot_dict(row, include_manifest=True) if row else None

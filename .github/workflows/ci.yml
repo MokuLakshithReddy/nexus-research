@@ -1,8 +1,8 @@
-name: V2 quality
+name: V3 quality
 
 on:
   push:
-    branches: [main, "v2/**"]
+    branches: [main, "v2/**", "v3/**"]
   pull_request:
     branches: [main]
 

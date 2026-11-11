@@ -1,44 +1,60 @@
-# Nexus Research V2 architecture
+# Nexus Research V3 architecture
 
 ## System flow
 
-1. A user signs in; the browser receives an HttpOnly session cookie and a signed, readable CSRF cookie.
-2. Authenticated project routes derive owner_id from the verified session. The API never trusts an owner ID from the request body.
-3. The API creates a durable research_jobs row and returns a job ID immediately.
-4. A separate worker claims queued jobs, calls enabled provider adapters concurrently, deduplicates URLs, persists sources, chunks source content and creates embeddings when configured.
-5. The worker marks the job completed or failed. Jobs that exceed their retry count are marked failed; stale running jobs are recovered after a lease timeout.
-6. Chat and report requests retrieve relevant source chunks. PostgreSQL uses pgvector cosine distance; SQLite uses a bounded lexical fallback.
-7. LLM output is instructed to cite source IDs, treat source text as untrusted data, and distinguish evidence from interpretation.
-8. Reports can be downloaded as Markdown, DOCX or PDF.
+1. A user authenticates and creates a private, owner-scoped research project.
+2. A durable research job is claimed by a worker. Enabled provider adapters collect metadata and available text.
+3. Sources are deduplicated, persisted, split into overlapping chunks, and embedded when a configured embedding provider is available.
+4. Retrieval returns source and chunk identifiers with excerpts. PostgreSQL uses pgvector when configured; SQLite retains a bounded lexical fallback.
+5. Research chat and report drafting use retrieved evidence, preserve source identifiers and treat all imported text as untrusted data.
+6. The V3 evidence analyzer creates candidate factual claims. With an LLM key it requests structured support/contradiction/context links; without one, it extracts sentences and labels their links as context only.
+7. A validator rejects invented source/chunk identifiers and model quotations that do not occur verbatim in the associated stored chunk.
+8. The evidence ledger stores each candidate, provisional machine assessment, source-passage links, and a separate researcher review status.
+9. A researcher can capture a content-addressed snapshot containing the project metadata, source metadata, SHA-256 source-text hashes, and indexed chunk count.
 
-## Persistence
+## Evidence ledger
 
-SQLAlchemy models represent users, projects, sources, source chunks, messages, reports and research jobs. PostgreSQL is the deployment target; SQLite is supported for single-machine development and tests.
+The evidence_claims table stores project-scoped, deduplicated claim candidates. The claim_evidence table links a claim to a source passage through (source_id, chunk_index). The database validates that the source and chunk belong to the same project before a link is saved.
 
-All child entities are accessed through owner-scoped project joins or owner-scoped job lookups. A project ID belonging to another account returns 404.
+Relations have three values:
 
-## Background queue
+- supports: the provisional analyzer says this passage supports the claim.
+- contradicts: the provisional analyzer says this passage conflicts with the claim.
+- context: passage is the exact context for an extractive candidate, or the analyzer cannot assign a stronger relation.
 
-The queue is database-backed rather than process-memory-backed. This means API restarts do not discard pending jobs. Workers claim one job in a short transaction and mark it running. Provider operations happen after the claim transaction closes. The worker stores attempt counts and error details, retries up to three times, and recovers stale running rows on startup.
+Machine assessment is distinct from researcher review. Review values are unreviewed, confirmed, and rejected. Re-running analysis may refresh machine assessment and links but must not overwrite the review decision.
 
-For multiple worker replicas, PostgreSQL row locking with FOR UPDATE SKIP LOCKED allows workers to claim different jobs. SQLite is intended for one local worker.
+Extractive fallback always uses needs_review plus context; it does not call a matching sentence verified.
 
-## Retrieval
+## Structured model output validation
 
-Each source is split into overlapping character-bounded chunks. When OPENAI_API_KEY is configured, chunks and queries are embedded with the configured embedding model. PostgreSQL stores vectors in pgvector and ranks by cosine distance. The SQLite path stores no vector and performs bounded lexical ranking over the project's chunks.
+The model is asked for JSON containing claims and exact quotes. The parser:
+- limits claim and evidence counts;
+- checks each source ID and chunk index against the current project's supplied chunks;
+- accepts only supports, contradicts, or context;
+- requires a verbatim quote substring of at least 24 characters in the stored chunk;
+- drops claims without at least one valid evidence link;
+- falls back to extractive contextual candidates if the model response is malformed or yields no valid claims.
 
-The initial retrieval design is intentionally transparent: source IDs, chunk indexes, source titles, dates and canonical URLs remain attached to every retrieved passage. A source's retrieval score is not a source-credibility score.
+This validator improves traceability but does not establish semantic entailment. Researchers must inspect the original source.
+
+## Research snapshots
+
+A snapshot is a canonical manifest with project details and source records. Each source record includes a SHA-256 hash of its stored content. A canonical JSON payload excluding the capture timestamp is hashed to provide deterministic identity for an unchanged research state. Repeated captures of an unchanged corpus return the existing snapshot record.
+
+The digest does not prove third-party publisher content is unchanged, and no external webpage is mirrored as an immutable archive by this feature.
+
+## Persistence and migration
+
+V3 adds evidence_claims, claim_evidence, and research_snapshots through Alembic revision 0002_v3_evidence, after 0001_v2_schema. The migration checks existing tables/indexes because the V2 baseline migration uses SQLAlchemy metadata creation on new installations.
+
+V2 accounts, projects, sources, chunks, queue jobs, messages, and reports are preserved. No V1-to-V2 migration is implied.
 
 ## Security boundaries
 
-- Session cookies are HttpOnly, SameSite=Lax and configurable as Secure.
-- Mutating authenticated API routes require a signed double-submit CSRF token.
-- Passwords are hashed using Argon2 via pwdlib.
-- Every data path is scoped to the current user.
-- API keys stay server-side.
-- Imported webpages reject local/private/reserved addresses and redirects. Deployments should still enforce outbound network controls to mitigate DNS rebinding and other SSRF edge cases.
-- Source text is untrusted; prompt instructions explicitly prevent source content from being treated as operational instructions.
-
-## Deliberate non-goals in V2
-
-No unrestricted social-media scraping, no login bypass, no private-account collection, no autonomous account actions, and no claim of exhaustive internet coverage.
+- All V3 routes require the authenticated owner-scoped project.
+- All state-changing routes require the existing CSRF token.
+- Evidence links are only created against source/chunk rows belonging to that project.
+- Model-generated source IDs, passage quotes, and relations are treated as untrusted until validated.
+- Source text is never executed. Prompt instructions inside source documents are ignored.
+- Snapshot hashes cover stored content and canonical metadata; they are integrity fingerprints, not trust or authenticity certificates.

@@ -146,3 +146,54 @@ a{color:inherit;text-decoration:none}
 .job-status-banner.failed{border-color:#704343;background:#2b2020;color:#f0b0b0}
 .job-status-banner.failed .job-status-dot{background:#ee8c8c;box-shadow:0 0 0 4px rgba(238,140,140,.09)}
 @media(max-width:520px){.auth-card{padding:24px 19px}.auth-card h1{font-size:27px}}
+
+
+/* V3 evidence ledger */
+.evidence-intro{margin-bottom:15px}
+.evidence-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:18px 0 12px}
+.evidence-stats>div{display:flex;flex-direction:column;gap:4px;padding:13px 14px;background:#1e2126;border:1px solid var(--border-soft);border-radius:9px}
+.evidence-stats strong{font:700 21px Manrope,sans-serif;color:#f1f2ed}
+.evidence-stats span,.evidence-label,.evidence-ref,.evidence-review-label{font:500 9px "DM Mono",monospace;letter-spacing:.7px;color:var(--subtle)}
+.evidence-notice{padding:10px 12px;border-left:2px solid #b9a06c;background:#22221f;color:#c5b995;font-size:11px;line-height:1.6}
+.evidence-list{display:grid;gap:12px;margin-top:14px}
+.evidence-claim-card{background:#1b1e23;border:1px solid #2c3038;border-radius:11px;padding:16px}
+.evidence-claim-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.evidence-badges{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.evidence-badge,.evidence-relation{display:inline-flex;align-items:center;border:1px solid #41444b;border-radius:99px;padding:3px 8px;color:#c9cbd0;font-size:9px;letter-spacing:.1px}
+.assessment-contested,.assessment-contradicted{border-color:#76514a;color:#e3a99f;background:#2b211f}
+.assessment-support_indicated{border-color:#506444;color:#c3dc9e;background:#22291e}
+.review-confirmed{border-color:#506444;color:#c3dc9e}
+.review-rejected{border-color:#76514a;color:#e3a99f}
+.evidence-claim-text{font:600 14px/1.65 Manrope,sans-serif;color:#f1f2ed;margin:13px 0 8px}
+.evidence-claim-meta{display:flex;gap:12px;flex-wrap:wrap;color:#858a95;font-size:10px}
+.evidence-links{display:grid;gap:8px;margin-top:13px}
+.evidence-link{padding:11px 12px;border:1px solid #30343c;border-radius:8px;background:#17191e;min-width:0}
+.evidence-link-top,.evidence-source-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.evidence-relation{color:#c8cbd2}
+.evidence-relation-supports{border-left:2px solid #9abf70}
+.evidence-relation-contradicts{border-left:2px solid #c47f70}
+.evidence-relation-context{border-left:2px solid #888b95}
+.evidence-ref{font-size:8px}
+.evidence-link blockquote{margin:10px 0;color:#c6c8cf;font-size:11px;line-height:1.7;border-left:1px solid #4e535e;padding-left:10px;white-space:pre-wrap}
+.evidence-source-row{font-size:10px;color:#9297a2}
+.evidence-source-row a{color:var(--accent)}
+.evidence-rationale{font-size:10px;color:#858a95;margin:8px 0 0}
+.evidence-review-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px solid #292d34}
+.evidence-review-label{margin-right:auto}
+.review-action{border:1px solid #3c414a;background:#202329;color:#aeb2bb;border-radius:6px;padding:6px 9px;font-size:10px}
+.review-action:hover,.review-action.selected{border-color:#68794e;color:var(--accent);background:#252c20}
+.snapshot-panel{margin-top:14px}
+.snapshot-list{display:grid;gap:8px}
+.snapshot-row{display:flex;align-items:center;gap:12px;padding:12px;background:#1c1f24;border:1px solid #2b2f37;border-radius:9px;min-width:0}
+.snapshot-mark{width:32px;height:32px;display:grid;place-items:center;background:#293129;color:var(--accent);border-radius:8px;font-size:18px;flex-shrink:0}
+.snapshot-copy{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.snapshot-copy strong{font-size:11px}.snapshot-copy span{font-size:10px;color:#9297a2}
+.snapshot-copy code{font:9px "DM Mono",monospace;color:#858b96;overflow-wrap:anywhere}
+.snapshot-download{white-space:nowrap}
+@media(max-width:740px){
+  .evidence-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .evidence-claim-head{align-items:flex-start;flex-direction:column}
+  .evidence-badges{justify-content:flex-start}
+  .snapshot-row{align-items:flex-start;flex-wrap:wrap}
+  .snapshot-download{margin-left:44px}
+}
