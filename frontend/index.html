@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#101114" />
+  <meta name="description" content="Nexus Research — collect evidence, connect ideas, and write source-grounded research." />
+  <title>Nexus Research — Research workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#home" aria-label="Nexus Research home">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span class="brand-name">nexus<span>.</span></span>
+      </a>
+      <div class="workspace-switcher">
+        <div class="workspace-avatar">NR</div>
+        <div class="workspace-copy"><strong>Research lab</strong><small>Personal workspace</small></div>
+        <span class="chevron">⌄</span>
+      </div>
+      <div class="side-section">
+        <div class="side-label">WORKSPACE</div>
+        <button class="side-link active" data-nav="projects"><span class="nav-icon">▦</span> Research projects <span class="side-count" id="project-count">0</span></button>
+        <button class="side-link" data-nav="sources"><span class="nav-icon">◫</span> Source library</button>
+        <button class="side-link" data-nav="reports"><span class="nav-icon">▤</span> Research documents</button>
+      </div>
+      <div class="side-section project-list-section">
+        <div class="side-label side-label-row">RECENT PROJECTS <button id="side-new-project" class="tiny-add" title="New project">+</button></div>
+        <div id="sidebar-projects" class="sidebar-projects"><div class="sidebar-empty">Your projects will appear here.</div></div>
+      </div>
+      <div class="sidebar-bottom">
+        <button class="side-link" id="connectors-open"><span class="nav-icon">⌘</span> Source connectors <span class="status-dot"></span></button>
+        <div class="sidebar-profile">
+          <div class="profile-avatar">L</div><div><strong>Researcher</strong><small>Local workspace</small></div><span class="more-dots">···</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>Workspace</span><span class="crumb-slash">/</span><strong id="breadcrumb-current">Overview</strong></div>
+        <div class="top-actions">
+          <div class="api-status"><span class="status-dot" id="ai-status-dot"></span><span id="ai-status-text">AI not configured</span></div>
+          <button class="icon-button" id="help-button" title="About Nexus">?</button>
+          <button class="new-project-button" id="top-new-project"><span>＋</span> New research</button>
+        </div>
+      </header>
+
+      <section class="page-content" id="home-view">
+        <div class="hero-intro">
+          <div class="eyebrow"><span class="eyebrow-line"></span> YOUR RESEARCH, CONNECTED</div>
+          <h1>Go beyond the <em>search.</em></h1>
+          <p class="hero-subtitle">One question. Multiple sources. A clearer picture of what the evidence says.</p>
+        </div>
+
+        <section class="research-launcher">
+          <div class="launcher-topline"><span class="sparkle">✳</span><span>START A RESEARCH PROJECT</span><span class="launcher-hint">AI research orchestration</span></div>
+          <form id="research-form">
+            <label class="sr-only" for="research-question">What do you want to research?</label>
+            <textarea id="research-question" rows="2" placeholder="What do you want to understand? Be as specific as you like…" required minlength="8"></textarea>
+            <div class="launcher-footer">
+              <div class="source-chips"><span class="source-chip"><i>◈</i> Academic</span><span class="source-chip"><i>◎</i> News & web</span><span class="source-chip"><i>▷</i> Video</span><span class="source-chip muted-chip">+ connected sources</span></div>
+              <button type="submit" class="primary-button" id="start-research-button">Start research <span>↗</span></button>
+            </div>
+          </form>
+          <div class="launcher-footnote"><span class="shield-icon">◇</span> Results are saved to a private project workspace. Every source keeps its original link.</div>
+        </section>
+
+        <section class="overview-section">
+          <div class="section-heading"><div><div class="eyebrow">YOUR LIBRARY</div><h2>Research, in progress.</h2></div><button class="text-button" id="view-all-projects">View all projects <span>→</span></button></div>
+          <div class="stats-grid">
+            <div class="stat-card"><div class="stat-top"><span>ACTIVE PROJECTS</span><span class="stat-symbol">▦</span></div><div class="stat-value" id="stat-projects">0</div><div class="stat-caption">Research spaces created</div></div>
+            <div class="stat-card"><div class="stat-top"><span>SOURCES COLLECTED</span><span class="stat-symbol">◫</span></div><div class="stat-value" id="stat-sources">0</div><div class="stat-caption">Across all your projects</div></div>
+            <div class="stat-card"><div class="stat-top"><span>DOCUMENTS</span><span class="stat-symbol">▤</span></div><div class="stat-value" id="stat-reports">0</div><div class="stat-caption">Research drafts generated</div></div>
+          </div>
+          <div class="project-grid-heading"><h3>Recent projects</h3><span class="subtle-label" id="project-grid-count">0 PROJECTS</span></div>
+          <div class="project-grid" id="project-grid"><div class="empty-project-card"><div class="empty-orbit">✳</div><h3>Your first research starts here.</h3><p>Ask a question above. Nexus will collect academic papers and news, then keep everything organized in one workspace.</p><button class="outline-button" id="empty-start">Create a research project <span>↗</span></button></div></div>
+        </section>
+      </section>
+
+      <section class="project-view hidden" id="project-view">
+        <div class="project-header">
+          <div class="project-heading-copy"><div class="eyebrow"><span class="eyebrow-line"></span> RESEARCH WORKSPACE <span class="project-id-label" id="project-id-label"></span></div><h1 id="project-title">Research project</h1><p id="project-question"></p></div>
+          <div class="project-header-actions"><button class="outline-button" id="add-source-open">＋ Add source</button><button class="primary-button" id="project-research-again">↻ Research more</button></div>
+        </div>
+        <div class="workspace-tabs"><button class="workspace-tab active" data-tab="overview">Overview</button><button class="workspace-tab" data-tab="sources">Sources <span id="sources-tab-count">0</span></button><button class="workspace-tab" data-tab="insights">Insights</button><button class="workspace-tab" data-tab="draft">Research document</button></div>
+        <div class="workspace-body">
+          <div class="workspace-main">
+            <div class="tab-panel" id="tab-overview">
+              <div class="project-metrics"><div class="metric-box"><span>COLLECTED SOURCES</span><strong id="project-source-count">0</strong></div><div class="metric-box"><span>ACADEMIC PAPERS</span><strong id="project-paper-count">0</strong></div><div class="metric-box"><span>NEWS & ARTICLES</span><strong id="project-article-count">0</strong></div><div class="metric-box"><span>LAST UPDATED</span><strong class="metric-small" id="project-updated">Just now</strong></div></div>
+              <div class="content-panel"><div class="panel-heading"><div><div class="eyebrow">COLLECTION</div><h3>Latest sources</h3></div><button class="text-button" data-open-tab="sources">View all <span>→</span></button></div><div id="overview-sources" class="source-list"><div class="panel-empty">Run research to collect your first sources.</div></div></div>
+              <div class="content-panel synthesis-preview"><div class="panel-heading"><div><div class="eyebrow">SYNTHESIS</div><h3>What the evidence is saying</h3></div><span class="ai-pill"><span>✳</span> NEXUS AI</span></div><div id="overview-synthesis" class="synthesis-empty">Your synthesis will take shape as sources are collected. Nexus will look for recurring themes, areas of agreement and conflicting findings.</div><button class="outline-button" id="overview-summarize">Generate evidence summary <span>↗</span></button></div>
+            </div>
+            <div class="tab-panel hidden" id="tab-sources"><div class="content-panel"><div class="panel-heading sources-toolbar"><div><div class="eyebrow">SOURCE LIBRARY</div><h3>Everything collected</h3><p class="panel-subtitle">Original links and metadata stay attached to every result.</p></div><div class="source-search-wrap"><input id="source-search" type="search" placeholder="Filter sources…"/><span>⌕</span></div></div><div class="source-filters"><button class="filter-chip active" data-filter="all">All sources</button><button class="filter-chip" data-filter="research_paper">Academic</button><button class="filter-chip" data-filter="news">News</button><button class="filter-chip" data-filter="video">Videos</button><button class="filter-chip" data-filter="document">Documents</button><button class="filter-chip" data-filter="article">Articles</button></div><div id="all-sources" class="source-list"><div class="panel-empty">No sources yet.</div></div></div></div>
+            <div class="tab-panel hidden" id="tab-insights"><div class="content-panel insights-panel"><div class="panel-heading"><div><div class="eyebrow">EVIDENCE SYNTHESIS</div><h3>Make sense of the material</h3></div><button class="primary-button" id="generate-summary">✳ Synthesize sources</button></div><p class="panel-subtitle">Nexus reviews the material in this project and gives you a cited summary. For model-powered synthesis, add an OpenAI API key to your environment.</p><div id="insights-output" class="insights-output"><div class="insight-placeholder"><span>✳</span><strong>Your evidence map starts with sources.</strong><p>Collect information first, then generate an evidence summary to see recurring themes and gaps.</p></div></div></div></div>
+            <div class="tab-panel hidden" id="tab-draft"><div class="content-panel"><div class="panel-heading"><div><div class="eyebrow">DOCUMENT STUDIO</div><h3>Research document</h3><p class="panel-subtitle">Turn the evidence collected here into a structured, referenced first draft.</p></div><button class="primary-button" id="generate-report">Generate document <span>↗</span></button></div><div id="report-output" class="report-output"><div class="insight-placeholder"><span>▤</span><strong>No document yet.</strong><p>Generate a report to create an editable Markdown draft with a bibliography and source IDs.</p></div></div><div id="report-actions" class="report-actions hidden"><button class="outline-button" id="download-report">↓ Download Markdown</button><span class="subtle-label">Review citations before publishing or submitting.</span></div></div></div>
+          </div>
+          <aside class="copilot-panel"><div class="copilot-head"><div class="copilot-icon">✳</div><div><strong>Research copilot</strong><small>Grounded in this project</small></div><span class="copilot-menu">···</span></div><div class="copilot-context"><span class="context-dot"></span> Using <strong id="copilot-source-count">0 sources</strong> from this workspace</div><div class="chat-messages" id="chat-messages"><div class="assistant-message"><div class="assistant-mark">✳</div><div><strong>Let's investigate.</strong><p>Ask me to summarize the collection, compare sources, identify disagreements or explore a specific claim.</p><div class="suggested-prompts"><button data-prompt="Summarize the key findings across all sources.">Summarize key findings <span>↗</span></button><button data-prompt="What themes or claims appear across multiple sources?">Find recurring themes <span>↗</span></button><button data-prompt="Where do the sources disagree or leave evidence gaps?">Find contradictions <span>↗</span></button></div></div></div></div><form class="chat-composer" id="chat-form"><textarea id="chat-input" rows="2" placeholder="Ask about your research…" required></textarea><div class="composer-footer"><span>↵ Send</span><button type="submit" id="chat-send" aria-label="Send message">↑</button></div></form><div class="copilot-disclaimer">Answers should be checked against the linked original sources.</div></aside>
+        </div>
+      </section>
+
+      <section class="library-view hidden" id="library-view"><div class="library-heading"><div class="eyebrow"><span class="eyebrow-line"></span> YOUR KNOWLEDGE BASE</div><h1 id="library-title">Source library</h1><p>All evidence saved across your research projects.</p></div><div class="content-panel"><div class="panel-heading"><h3 id="library-count-title">All sources</h3><div class="source-search-wrap"><input id="library-search" placeholder="Search your library…"/><span>⌕</span></div></div><div id="library-sources" class="source-list"><div class="panel-empty">Create a project and collect your first sources.</div></div></div></section>
+      <section class="library-view hidden" id="reports-view"><div class="library-heading"><div class="eyebrow"><span class="eyebrow-line"></span> YOUR WRITING</div><h1>Research documents</h1><p>Drafts generated from your evidence collections.</p></div><div id="all-reports" class="report-library-grid"><div class="empty-project-card"><div class="empty-orbit">▤</div><h3>No documents yet.</h3><p>Open a research project and generate a referenced report from its collected sources.</p></div></div></section>
+      <footer class="app-footer"><span>© 2026 NEXUS RESEARCH</span><span>BUILT FOR CURIOSITY <b>✳</b></span></footer>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modal-header"><div><div class="eyebrow">NEXUS SETTINGS</div><h2 id="modal-title">Add a source</h2></div><button class="modal-close" id="modal-close" aria-label="Close">×</button></div><div id="modal-content"></div></section></div>
+  <div class="toast hidden" id="toast" role="status"></div>
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>
