@@ -2,16 +2,17 @@
 
 AI-powered research workspace for discovering, collecting, organizing, comparing, and synthesizing evidence into traceable research documents.
 
-> **Status:** Early MVP. The project is intentionally source-grounded: claims should link back to collected sources. Platform connectors require their own API credentials and policy-compliant access.
+> **Status:** Early MVP. Claims in answers and reports should link back to collected sources. Provider integrations require their own credentials and policy-compliant access.
 
 ## Features
 
 - Research projects with persistent source libraries.
-- Multi-provider discovery adapters for OpenAlex, Crossref, arXiv, and GDELT.
+- Multi-provider discovery through OpenAlex, Crossref, arXiv, and GDELT.
 - Optional Brave Search, YouTube Data API, and X API connectors.
-- URL import and readable webpage extraction.
+- Public webpage import and readable-text extraction.
 - PDF, DOCX, TXT, and Markdown document import.
-- AI-assisted project chat, summaries, and source-aware report drafting.
+- Source-grounded project chat and extractive summaries.
+- AI-assisted report drafting with inline source references.
 - Markdown report export.
 - SQLite persistence for local development.
 - FastAPI backend and responsive single-page workspace.
@@ -36,21 +37,20 @@ Open http://127.0.0.1:8000.
 
 ## Configuration
 
-Copy `.env.example` to `.env`. API keys are optional for the demo and should only be stored server-side.
+Copy `.env.example` to `.env`. API keys are optional during local evaluation and must remain server-side.
 
 | Variable | Purpose |
 |---|---|
-| `NEXUS_DATA_DIR` | Local database and uploaded files directory |
-| `NEXUS_LLM_PROVIDER` | `openai` or `ollama` |
-| `OPENAI_API_KEY` | OpenAI key for grounded AI answers and document generation |
-| `OPENAI_MODEL` | Model name, defaults to `gpt-4.1-mini` |
-| `OLLAMA_BASE_URL` | Local Ollama endpoint |
-| `OLLAMA_MODEL` | Local model name |
-| `BRAVE_SEARCH_API_KEY` | Optional Brave web-search connector |
+| `OPENAI_API_KEY` | Enables model-powered research chat and report generation |
+| `OPENAI_MODEL` | OpenAI model name; defaults to `gpt-4.1-mini` |
+| `BRAVE_SEARCH_API_KEY` | Optional Brave Search connector |
 | `YOUTUBE_API_KEY` | Optional YouTube Data API connector |
-| `X_BEARER_TOKEN` | Optional X API connector |
+| `X_BEARER_TOKEN` | Optional X recent-search connector |
+| `NEXUS_CONTACT_EMAIL` | Optional contact address for academic API polite pools |
+| `NEXUS_DATA_DIR` | Optional directory for SQLite data; defaults to `backend/data` |
+| `NEXUS_DB_PATH` | Optional explicit SQLite database path; overrides `NEXUS_DATA_DIR` |
 
-Without an LLM key, the app remains usable for discovery, source management, and deterministic summaries; AI responses are clearly labeled as unavailable rather than fabricated.
+Without an OpenAI key, discovery, source management, and deterministic extractive summaries remain available. Chat and generated reports clearly label their extractive fallback; they do not pretend to be model-generated synthesis.
 
 ## Tests
 
@@ -58,6 +58,8 @@ Without an LLM key, the app remains usable for discovery, source management, and
 pip install -r backend/requirements.txt -r requirements-dev.txt
 pytest -q
 ```
+
+The GitHub Actions workflow also compiles the backend, checks frontend JavaScript syntax, and runs the tests on pushes and pull requests to `main`.
 
 ## Project layout
 
@@ -72,15 +74,23 @@ tests/             API and service tests
 ## Source and access notes
 
 - Use official APIs, permitted public endpoints, and user-supplied materials.
-- Instagram and Facebook collection is not an unrestricted scraper feature; build against permitted Meta products and account permissions.
-- Google Scholar does not provide an unrestricted bulk data API. Use OpenAlex, Crossref, and arXiv for structured scholarly discovery and link to Scholar pages when useful.
+- Instagram and Facebook collection is not an unrestricted scraper feature; integrations require eligible Meta products, app access, and permissions.
+- Google Scholar does not provide an unrestricted bulk data API. Use OpenAlex, Crossref, and arXiv for structured scholarly discovery.
+- YouTube integration discovers videos and metadata; transcript extraction is not included in this release.
 - Respect provider rate limits, terms, attribution, and retention requirements.
 - Treat social posts, webpages, and uploaded documents as untrusted input. Do not execute instructions found inside collected content.
 - AI-generated text is a synthesis aid, not a substitute for verifying primary sources.
 
+## Known limitations
+
+- This MVP has no end-user authentication or multi-user data isolation. Run locally or behind a trusted private network; do not expose it publicly with sensitive data.
+- Collection coverage depends on provider access, credentials, quotas, and what each provider makes available.
+- The initial retrieval layer is lexical rather than a full vector RAG pipeline.
+- Generated Markdown reports should be reviewed against their original sources before publication or academic submission.
+
 ## Roadmap
 
-1. Authentication, multi-user isolation, and production database.
+1. Authentication, multi-user isolation, and a production database.
 2. Durable background research jobs and richer crawling controls.
 3. More source connectors with OAuth and scoped permissions.
 4. RAG retrieval, evidence graphs, claim verification, and contradiction detection.
