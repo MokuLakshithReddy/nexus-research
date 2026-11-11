@@ -99,40 +99,32 @@ async def extract_url(url: str) -> dict[str, Any]:
 
 
 def chunk_text(text: str, max_chars: int = 1800, overlap: int = 220) -> list[str]:
-    normalized = re.sub(r"[ \t]+", " ", text or "").strip()
+    normalized = re.sub(r"\\s+", " ", text or "").strip()
     if not normalized:
         return []
     if len(normalized) <= max_chars:
         return [normalized]
-    sentences = re.split(r"(?<=[.!?])\s+|\n{2,}", normalized)
     chunks: list[str] = []
-    current = ""
-    for sentence in sentences:
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        if len(sentence) > max_chars:
-            if current:
-                chunks.append(current)
-                current = ""
-            start = 0
-            while start < len(sentence):
-                end = min(len(sentence), start + max_chars)
-                chunks.append(sentence[start:end])
-                if end == len(sentence):
-                    break
-                start = max(start + 1, end - overlap)
-            continue
-        candidate = f"{current} {sentence}".strip()
-        if current and len(candidate) > max_chars:
-            chunks.append(current)
-            current = (current[-overlap:] + " " + sentence).strip()
-        else:
-            current = candidate
-    if current:
-        chunks.append(current)
+    start = 0
+    while start < len(normalized):
+        end = min(start + max_chars, len(normalized))
+        if end < len(normalized):
+            candidates = [
+                normalized.rfind(". ", start, end),
+                normalized.rfind("! ", start, end),
+                normalized.rfind("? ", start, end),
+                normalized.rfind(" ", start, end),
+            ]
+            boundary = max(candidates)
+            if boundary > start + int(max_chars * 0.55):
+                end = boundary + 1
+        piece = normalized[start:end].strip()
+        if piece:
+            chunks.append(piece)
+        if end >= len(normalized):
+            break
+        start = max(start + 1, end - overlap)
     return chunks
-
 
 async def embed_texts(texts: list[str]) -> list[list[float] | None]:
     key = os.getenv("OPENAI_API_KEY")

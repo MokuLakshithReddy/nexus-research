@@ -1,101 +1,137 @@
 # Nexus Research
 
-AI-powered research workspace for discovering, collecting, organizing, comparing, and synthesizing evidence into traceable research documents.
+Nexus Research is a source-grounded workspace for collecting evidence from multiple providers, asking questions across a research library, and producing cited reports.
 
-> **Status:** Early MVP. Claims in answers and reports should link back to collected sources. Provider integrations require their own credentials and policy-compliant access.
+**Version 2** adds account-isolated workspaces, PostgreSQL persistence, a durable research-job queue, chunk-based retrieval with pgvector, and Markdown/DOCX/PDF exports.
 
-## Features
+## What works in V2
 
-- Research projects with persistent source libraries.
-- Multi-provider discovery through OpenAlex, Crossref, arXiv, and GDELT.
-- Optional Brave Search, YouTube Data API, and X API connectors.
-- Public webpage import and readable-text extraction.
-- PDF, DOCX, TXT, and Markdown document import.
-- Source-grounded project chat and extractive summaries.
-- AI-assisted report drafting with inline source references.
-- Markdown report export.
-- SQLite persistence for local development.
-- FastAPI backend and responsive single-page workspace.
+- **Accounts and isolation:** sign up/sign in with Argon2 password hashes, HttpOnly session cookies, CSRF validation, and owner-scoped project/source/message/report/job reads and writes.
+- **Research projects:** create independent research workspaces with a question, source library, chat history and saved reports.
+- **Source collection:** OpenAlex, Crossref, arXiv and GDELT work without keys; Brave Search, YouTube Data API and X require provider credentials.
+- **Background research:** requests are stored as database jobs and processed by a separate worker. Jobs survive API restarts, retry failures, and recover stale worker leases.
+- **Evidence indexing:** imported material is chunked with overlap. PostgreSQL uses pgvector cosine search when OpenAI embeddings are configured; SQLite uses bounded lexical retrieval for local development.
+- **Research chat and reports:** model-powered responses cite source IDs and are instructed to treat source text as untrusted evidence. Without an LLM key, the app labels its output as an extractive fallback.
+- **Document imports:** PDF, DOCX, TXT, Markdown and public readable webpages.
+- **Exports:** Markdown, DOCX and PDF.
+- **Operations:** Docker Compose with PostgreSQL/pgvector, a separate worker, and Alembic schema migration.
 
-## Quick start
+## Quick start: local development
 
 Requirements: Python 3.11+.
 
-```bash
-python -m venv .venv
-# Windows PowerShell
-.venv\Scripts\Activate.ps1
-# macOS/Linux
-# source .venv/bin/activate
+### 1. Create the environment
 
-pip install -r backend/requirements.txt -r requirements-dev.txt
-cp .env.example .env
-uvicorn app.main:app --app-dir backend --reload
-```
+Windows PowerShell:
 
-Open http://127.0.0.1:8000.
+    python -m venv .venv
+    .venv\Scripts\Activate.ps1
+    Copy-Item .env.example .env
+    pip install -r requirements-dev.txt
+
+macOS/Linux:
+
+    python -m venv .venv
+    source .venv/bin/activate
+    cp .env.example .env
+    pip install -r requirements-dev.txt
+
+For local development, SQLite is selected automatically when DATABASE_URL is not set. Set a unique SESSION_SECRET_KEY in .env before using real data. An OpenAI key is optional.
+
+### 2. Start the API
+
+    uvicorn app.main:app --app-dir backend --reload
+
+Open http://127.0.0.1:8000 and create an account.
+
+### 3. Start the background worker
+
+In a second terminal, activate the same virtual environment and run:
+
+Windows PowerShell:
+
+    $env:PYTHONPATH="backend"; python -m app.worker
+
+macOS/Linux:
+
+    PYTHONPATH=backend python -m app.worker
+
+The API persists jobs; the worker performs provider collection and indexing. Keep both processes running for research collection.
+
+## Run with PostgreSQL + pgvector
+
+1. Copy .env.example to .env.
+2. Set a strong POSTGRES_PASSWORD and generate a long random SESSION_SECRET_KEY.
+3. Add provider and LLM keys as required.
+4. Run: docker compose up --build
+
+The API container runs Alembic migrations before starting. The worker waits for the API and database to start. PostgreSQL data is stored in the nexus-postgres Docker volume.
+
+For HTTPS deployment, set AUTH_COOKIE_SECURE=true, terminate TLS at a trusted reverse proxy, and configure request-size limits and rate limiting at the edge.
 
 ## Configuration
 
-Copy `.env.example` to `.env`. API keys are optional during local evaluation and must remain server-side.
-
 | Variable | Purpose |
 |---|---|
-| `OPENAI_API_KEY` | Enables model-powered research chat and report generation |
-| `OPENAI_MODEL` | OpenAI model name; defaults to `gpt-4.1-mini` |
-| `BRAVE_SEARCH_API_KEY` | Optional Brave Search connector |
-| `YOUTUBE_API_KEY` | Optional YouTube Data API connector |
-| `X_BEARER_TOKEN` | Optional X recent-search connector |
-| `NEXUS_CONTACT_EMAIL` | Optional contact address for academic API polite pools |
-| `NEXUS_DATA_DIR` | Optional directory for SQLite data; defaults to `backend/data` |
-| `NEXUS_DB_PATH` | Optional explicit SQLite database path; overrides `NEXUS_DATA_DIR` |
+| SESSION_SECRET_KEY | Required for production cookie signing and CSRF signatures |
+| AUTH_COOKIE_SECURE | Set true when served over HTTPS |
+| SESSION_TTL_HOURS | Session lifetime; defaults to 12 hours |
+| DATABASE_URL | SQLAlchemy URL; PostgreSQL recommended for deployment |
+| OPENAI_API_KEY | Enables model-powered synthesis and embeddings |
+| OPENAI_MODEL | Chat model; defaults to gpt-4.1-mini |
+| OPENAI_EMBEDDING_MODEL | Defaults to text-embedding-3-small (1536 dimensions) |
+| BRAVE_SEARCH_API_KEY | Optional web search connector |
+| YOUTUBE_API_KEY | Optional YouTube Data API connector |
+| X_BEARER_TOKEN | Optional X recent-search connector |
+| NEXUS_CONTACT_EMAIL | Optional contact address for academic API polite pools |
 
-Without an OpenAI key, discovery, source management, and deterministic extractive summaries remain available. Chat and generated reports clearly label their extractive fallback; they do not pretend to be model-generated synthesis.
+Keys are read server-side. Never put provider secrets in frontend JavaScript or commit a populated .env.
 
 ## Tests
 
-```bash
-pip install -r backend/requirements.txt -r requirements-dev.txt
-pytest -q
-```
+    pip install -r requirements-dev.txt
+    pytest -q
 
-The GitHub Actions workflow also compiles the backend, checks frontend JavaScript syntax, and runs the tests on pushes and pull requests to `main`.
+The test suite covers authentication, owner isolation, CSRF-protected writes, durable queue state transitions, source indexing, document export and URL safety. CI also compiles Python modules and checks frontend JavaScript syntax.
 
-## Project layout
+## Architecture
 
-```
-backend/app/       FastAPI application, database, ingestion and research services
-frontend/          Responsive research workspace UI
-docs/              Architecture and connector notes
-tests/             API and service tests
-.github/workflows/ CI
-```
+    Browser
+      ├── HttpOnly session + CSRF token
+      └── FastAPI
+            ├── Auth + owner-scoped API
+            ├── PostgreSQL / SQLite
+            │     ├── users, projects, sources, chunks
+            │     ├── messages, reports
+            │     └── durable research jobs
+            ├── Provider adapters
+            ├── Chunking + embedding + retrieval
+            └── Report generation
+                     ▲
+                     │
+            Background worker
+            ├── claim queued job
+            ├── collect providers
+            ├── deduplicate and persist
+            ├── chunk and embed
+            └── complete / retry / recover
 
-## Source and access notes
+See docs/ARCHITECTURE.md, docs/CONNECTORS.md, docs/OPERATIONS.md, and docs/EVALUATION.md.
 
-- Use official APIs, permitted public endpoints, and user-supplied materials.
-- Instagram and Facebook collection is not an unrestricted scraper feature; integrations require eligible Meta products, app access, and permissions.
-- Google Scholar does not provide an unrestricted bulk data API. Use OpenAlex, Crossref, and arXiv for structured scholarly discovery.
-- YouTube integration discovers videos and metadata; transcript extraction is not included in this release.
-- Respect provider rate limits, terms, attribution, and retention requirements.
-- Treat social posts, webpages, and uploaded documents as untrusted input. Do not execute instructions found inside collected content.
-- AI-generated text is a synthesis aid, not a substitute for verifying primary sources.
+## Important limitations
 
-## Known limitations
+- Instagram and Facebook connectors are not implemented. Use only supported Meta APIs and permissions; the product does not bypass logins or scrape private accounts.
+- YouTube discovery returns metadata; transcript retrieval is not included.
+- Google Scholar has no unrestricted bulk API integration; scholarly discovery uses OpenAlex, Crossref and arXiv.
+- Semantic retrieval requires a configured embedding provider and PostgreSQL/pgvector. SQLite uses lexical retrieval.
+- Email verification, password reset, OAuth sign-in, MFA, team collaboration and organization-level access controls are not included yet.
+- Public deployment still requires operational rate limiting, backups, monitoring, HTTPS, secret rotation, and a security review. Do not treat an MVP as an audited security product.
+- Search coverage depends on provider quotas, API tiers, content permissions and source availability. The system must not claim exhaustive coverage.
 
-- This MVP has no end-user authentication or multi-user data isolation. Run locally or behind a trusted private network; do not expose it publicly with sensitive data.
-- Collection coverage depends on provider access, credentials, quotas, and what each provider makes available.
-- The initial retrieval layer is lexical rather than a full vector RAG pipeline.
-- Generated Markdown reports should be reviewed against their original sources before publication or academic submission.
+## Version 2 migration note
 
-## Roadmap
-
-1. Authentication, multi-user isolation, and a production database.
-2. Durable background research jobs and richer crawling controls.
-3. More source connectors with OAuth and scoped permissions.
-4. RAG retrieval, evidence graphs, claim verification, and contradiction detection.
-5. DOCX/PDF report export, collaboration, and scheduled monitoring.
+V2 uses a new SQLite filename at backend/data/nexus-v2.db for local development. It does not silently reuse or migrate the V1 SQLite database. Export any V1 material you need before switching; an explicit V1-to-V2 migration utility is a future task.
 
 ## License
 
-See [LICENSE](LICENSE). This project is currently distributed under a proprietary, no-reuse license.
+See LICENSE. This repository is distributed under a proprietary, no-reuse license.

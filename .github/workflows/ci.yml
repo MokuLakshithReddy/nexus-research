@@ -1,28 +1,45 @@
-name: Backend quality
+name: V2 quality
 
 on:
   push:
-    branches: [main]
+    branches: [main, "v2/**"]
   pull_request:
     branches: [main]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: nexus_test
+          POSTGRES_PASSWORD: nexus_test
+          POSTGRES_DB: nexus_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexus_test -d nexus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NEXUS_TEST_POSTGRES_URL: postgresql+psycopg://nexus_test:nexus_test@localhost:5432/nexus_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements-dev.txt
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
       - name: Compile Python modules
-        run: python -m compileall -q backend/app tests
+        run: python -m compileall -q backend/app tests migrations
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
       - name: Check frontend JavaScript syntax
         run: node --check frontend/app.js
-      - name: Run tests
-        run: pytest tests -q
+      - name: Run API, security, retrieval and database tests
+        run: pytest -q

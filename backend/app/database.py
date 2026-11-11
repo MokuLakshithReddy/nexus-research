@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 DEFAULT_DB = Path(__file__).resolve().parents[1] / "data" / "nexus-v2.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB.as_posix()}")

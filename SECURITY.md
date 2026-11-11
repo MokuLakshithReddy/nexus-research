@@ -1,15 +1,25 @@
 # Security policy
 
-Nexus Research is an early MVP. Do not expose it to the public internet with sensitive research or credentials until authentication, per-user authorization, rate limiting, secure deployment configuration, and a production database have been implemented and reviewed.
+Nexus Research V2 includes authenticated accounts and owner-scoped persistence, but it is not an independently audited security product.
 
-## Reporting a vulnerability
+## Supported baseline
 
-Please do not publish exploitable security details in a public issue. Contact the repository owner privately through GitHub's security advisory feature, if enabled, or use a private communication channel.
+- Passwords are hashed using Argon2.
+- Session cookies are HttpOnly, SameSite=Lax and configurable as Secure.
+- Authenticated writes require a signed CSRF token.
+- All project, source, report, message and job queries are scoped to the current account.
+- Provider keys are read server-side.
+- .env, local databases and local data directories must not be committed.
+- URL imports reject localhost/private/reserved destinations and redirects; deploy with outbound network restrictions to reduce SSRF risk.
+- Uploaded content and retrieved passages are treated as untrusted data by the AI prompts.
 
-## Current security boundaries
+## Known security gaps
 
-- Provider keys are read server-side from environment variables.
-- `.env` and local database files are excluded from Git.
-- URL import rejects localhost/private/reserved destinations, supports only HTTP(S), avoids redirects, and caps response size.
-- File uploads are type- and size-limited, but extracted document content may contain untrusted instructions. The AI prompt is designed to treat it as evidence, not instructions; review generated output.
-- The application currently has no end-user authentication or multi-tenant data isolation. Run locally or behind a trusted private network only.
+- Email verification, password reset, MFA, OAuth, organization roles, audit logs and account deletion workflows are not implemented.
+- Application-level distributed rate limiting is not implemented; enforce it at the reverse proxy or API gateway before public exposure.
+- DNS rebinding and parser-specific document attacks require further hardening and review.
+- There is no independent penetration test or security certification.
+
+## Reporting
+
+Do not publish exploitable details in public issues. Use GitHub's private vulnerability reporting when enabled, or contact the repository owner privately.

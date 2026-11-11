@@ -123,3 +123,9 @@ class ResearchJob(Base):
 
 Index("ix_projects_owner_updated", Project.owner_id, Project.updated_at)
 Index("ix_chunks_project_source", SourceChunk.project_id, SourceChunk.source_id)
+Index(
+    "ix_source_chunks_embedding_hnsw",
+    SourceChunk.embedding,
+    postgresql_using="hnsw",
+    postgresql_ops={"embedding": "vector_cosine_ops"},
+)
