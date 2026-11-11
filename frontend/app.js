@@ -501,7 +501,7 @@ function renderEvidenceLedger() {
   } else {
     claimsNode.innerHTML = claims.map(claim => {
       const evidence = (claim.evidence || []).map(link => {
-        const external = /^https?:\\/\\//i.test(link.source_url || "");
+        const external = (link.source_url || "").startsWith("https://") || (link.source_url || "").startsWith("http://");
         const title = escapeHtml(link.source_title || ("Source " + link.source_id));
         const sourceLink = external
           ? '<a href="' + escapeHtml(link.source_url) + '" target="_blank" rel="noopener noreferrer">' + title + ' ↗</a>'
