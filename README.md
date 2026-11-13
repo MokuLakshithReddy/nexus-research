@@ -1,5 +1,8 @@
 # Nexus Research
 
+[![Stars](https://img.shields.io/github/stars/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/stargazers) [![Forks](https://img.shields.io/github/forks/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/forks) [![Open Issues](https://img.shields.io/github/issues/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/issues) [![Last Commit](https://img.shields.io/github/last-commit/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/commits/main)
+
+
 Nexus Research is a source-grounded workspace for collecting evidence from multiple providers, asking questions across a research library, and producing cited reports.
 
 **Version 3** adds a claim-level evidence ledger, auditable source-passage links, researcher review decisions, and content-addressed research snapshots on top of V2's secure workspaces and durable collection pipeline.
