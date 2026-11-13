@@ -1,8 +1,40 @@
 # Nexus Research
 
+[![Stars](https://img.shields.io/github/stars/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/stargazers) [![Forks](https://img.shields.io/github/forks/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/forks) [![Open Issues](https://img.shields.io/github/issues/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/issues) [![Last Commit](https://img.shields.io/github/last-commit/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/commits/main)
+
+
 Nexus Research is a source-grounded workspace for collecting evidence from multiple providers, asking questions across a research library, and producing cited reports.
 
 **Version 3** adds a claim-level evidence ledger, auditable source-passage links, researcher review decisions, and content-addressed research snapshots on top of V2's secure workspaces and durable collection pipeline.
+
+## Visual workflow: research with an auditable evidence trail
+
+```mermaid
+flowchart TD
+    A["Research question"] --> B["Private project workspace"]
+    B --> C["Durable collection job"]
+    C --> D["Provider adapters and document imports"]
+    D --> E["Parse, deduplicate, chunk and index sources"]
+    E --> F["Evidence retrieval for chat and reports"]
+    F --> G["Candidate claims and exact source passages"]
+    G --> H["Validate source IDs, chunks and verbatim quotes"]
+    H --> I["Researcher review: support / contradict / context"]
+    I --> J["Content-addressed research snapshot"]
+```
+
+### What counts as evidence here?
+
+- Source and chunk identifiers are checked against the current project before links are stored.
+- Model-provided quotations must occur verbatim in the stored passage; unsupported links are dropped.
+- Extractive fallback candidates remain **unreviewed context**, not verified claims.
+- Machine assessment and researcher review are stored separately.
+- Snapshots hash the stored source text and manifest; they do not prove that a publisher's original webpage has remained unchanged.
+
+See the [architecture](docs/ARCHITECTURE.md), [evidence ledger](docs/EVIDENCE_LEDGER.md), and [connector guide](docs/CONNECTORS.md). No latency or answer-quality benchmark is currently published, so this README does not present unmeasured performance claims.
+
+**Why it matters:** turns a collection of links and AI summaries into a workspace where claims can be inspected against the exact passages they came from.
+
+---
 
 ## What works in V3
 
