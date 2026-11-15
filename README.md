@@ -1,17 +1,11 @@
 # Nexus Research
 
+[![Stars](https://img.shields.io/github/stars/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/stargazers) [![Forks](https://img.shields.io/github/forks/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/forks) [![Open Issues](https://img.shields.io/github/issues/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/issues) [![Last Commit](https://img.shields.io/github/last-commit/MokuLakshithReddy/nexus-research?style=flat-square)](https://github.com/MokuLakshithReddy/nexus-research/commits/main)
+
+
 Nexus Research is a source-grounded workspace for collecting evidence from multiple providers, asking questions across a research library, and producing cited reports.
 
 **Version 3** adds a claim-level evidence ledger, auditable source-passage links, researcher review decisions, and content-addressed research snapshots on top of V2's secure workspaces and durable collection pipeline.
-
-## At a glance
-
-![GitHub stars](https://img.shields.io/github/stars/MokuLakshithReddy/nexus-research?style=flat-square&label=stars)
-![GitHub forks](https://img.shields.io/github/forks/MokuLakshithReddy/nexus-research?style=flat-square&label=forks)
-![Open issues](https://img.shields.io/github/issues/MokuLakshithReddy/nexus-research?style=flat-square&label=open%20issues)
-![Last commit](https://img.shields.io/github/last-commit/MokuLakshithReddy/nexus-research?style=flat-square)
-
-**Why it matters:** Research summaries are only useful when readers can inspect where each claim came from. Nexus Research is designed to preserve the chain from source collection to passage-level evidence, researcher review, and the final report snapshot.
 
 ## Research pipeline
 
@@ -26,6 +20,16 @@ flowchart TD
     R --> S["Content-addressed research snapshot"]
     S --> O["Cited report and follow-up Q&A"]
 ```
+
+### What counts as evidence here?
+
+- Source and chunk identifiers are checked against the current project before links are stored.
+- Model-provided quotations must occur verbatim in the stored passage; unsupported links are dropped.
+- Extractive fallback candidates remain **unreviewed context**, not verified claims.
+- Machine assessment and researcher review are stored separately.
+- Snapshots hash the stored source text and manifest; they do not prove that a publisher's original webpage has remained unchanged.
+
+See the [architecture](docs/ARCHITECTURE.md), [evidence ledger](docs/EVIDENCE_LEDGER.md), and [connector guide](docs/CONNECTORS.md). No latency or answer-quality benchmark is currently published, so this README does not present unmeasured performance claims.
 
 **Connector scope:** OpenAlex, Crossref, arXiv, and GDELT are documented as key-free sources; Brave Search, YouTube, and X require provider credentials. Source availability depends on configured providers and network access.
 
